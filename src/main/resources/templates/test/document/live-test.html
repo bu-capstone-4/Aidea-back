@@ -1,0 +1,122 @@
+<head>
+    <meta charset="UTF-8">
+    <title>Yjs + Spring STOMP 테스트</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs/bundles/stomp.umd.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        #editor {
+            width: 100%;
+            height: 200px;
+            font-size: 16px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #status {
+            margin: 10px 0;
+            color: gray;
+        }
+
+        #log {
+            background: #f4f4f4;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>📝 실시간 공동 문서 편집</h2>
+    <div id="status">🔴 연결 안됨</div>
+    <textarea id="editor" placeholder="여기에 입력하세요..."></textarea>
+    <h4>로그</h4>
+    <div id="log"></div>
+
+    <script type="module">
+        import * as Y from 'https://esm.sh/yjs@13.6.30'
+
+        const DOC_ID = 'doc-001'
+        const ydoc = new Y.Doc()
+        const ytext = ydoc.getText('content')
+
+        const editor = document.getElementById('editor')
+        const statusEl = document.getElementById('status')
+        const logEl = document.getElementById('log')
+
+        function log(msg) {
+            logEl.innerHTML += `<div>${new Date().toLocaleTimeString()} - ${msg}</div>`
+            logEl.scrollTop = logEl.scrollHeight
+        }
+
+        const client = new StompJs.Client({
+            webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+            onConnect: () => {
+                statusEl.textContent = '🟢 연결됨'
+                statusEl.style.color = 'green'
+                log('서버 연결 성공')
+
+                client.subscribe(`/topic/doc/${DOC_ID}`, (message) => {
+                    const { update } = JSON.parse(message.body)
+                    const binary = Uint8Array.from(atob(update), c => c.charCodeAt(0))
+                    Y.applyUpdate(ydoc, binary, 'remote')
+                    log('업데이트 수신')
+                })
+
+                client.subscribe(`/user/queue/doc/sync`, (message) => {
+                    const { updates } = JSON.parse(message.body)
+                    if (updates && updates.length > 0) {
+                        updates.forEach(update => {
+                            const binary = Uint8Array.from(atob(update), c => c.charCodeAt(0))
+                            Y.applyUpdate(ydoc, binary, 'remote')
+                        })
+                        log('초기 문서 동기화 완료')
+                    }
+                })
+
+                client.publish({
+                    destination: `/app/doc/${DOC_ID}/sync`,
+                    body: JSON.stringify({ docId: DOC_ID })
+                })
+            },
+            onDisconnect: () => {
+                statusEl.textContent = '🔴 연결 끊김'
+                statusEl.style.color = 'red'
+                log('서버 연결 끊김')
+            }
+        })
+
+        client.activate()
+
+        ytext.observe(event => {
+            // if (event.transaction.origin === 'local') return
+            editor.value = ytext.toString()
+        })
+
+        editor.addEventListener('input', () => {
+            ydoc.transact(() => {
+                ytext.delete(0, ytext.length)
+                ytext.insert(0, editor.value)
+            }, 'local')
+        })
+
+        ydoc.on('update', (update, origin) => {
+            if (origin === 'remote') return
+
+            const base64 = btoa(String.fromCharCode(...update))
+            client.publish({
+                destination: `/app/doc/${DOC_ID}/update`,
+                body: JSON.stringify({ docId: DOC_ID, update: base64 })
+            })
+            log('업데이트 전송')
+        })
+    </script>
+</body>
