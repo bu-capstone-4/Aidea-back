@@ -14,6 +14,8 @@ import com.aidea.aidea.domain.document.dto.YjsUpdateMessage;
 import com.aidea.aidea.domain.document.service.DocumentService;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+
 
 @Controller
 @RequiredArgsConstructor
@@ -21,6 +23,12 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final SimpMessagingTemplate messagingTemplate; // 특정 결로로 메시지 직접 전송
+
+    @GetMapping("/")
+    public String runTest() {
+        return "/test/document/live-test";
+    }
+    
 
     @MessageMapping("/doc/{docId}/update")
     public void handleUpdate(
