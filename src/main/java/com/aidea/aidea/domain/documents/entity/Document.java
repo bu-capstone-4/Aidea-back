@@ -28,12 +28,38 @@ public class Document {
     private String title;
 
     @Lob
-    @Column(name = "yjs_binary", nullable = false)
+    @Column(name = "yjs_binary", nullable = true)
     private byte[] yjsBinary;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt; 
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     @Column(name = "updated_by")
     private String updatedBy;
+
+    @PrePersist
+    public void onCreate() {
+
+        // ID 생성
+        if (id == null) {
+            id = java.util.UUID.randomUUID().toString();
+        }
+
+        // 생성 시간
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+
+        // 수정 시간
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
 }
