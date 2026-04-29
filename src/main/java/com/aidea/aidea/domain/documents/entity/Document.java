@@ -1,4 +1,4 @@
-package com.aidea.aidea.domain.document.entity;
+package com.aidea.aidea.domain.documents.entity;
 
 import java.time.LocalDateTime;
 

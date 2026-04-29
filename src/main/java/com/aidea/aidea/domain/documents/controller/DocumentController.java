@@ -1,4 +1,4 @@
-package com.aidea.aidea.domain.document.controller;
+package com.aidea.aidea.domain.documents.controller;
 
 import java.util.Base64;
 import java.util.List;
@@ -10,11 +10,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 
-import com.aidea.aidea.domain.document.dto.YjsUpdateMessage;
-import com.aidea.aidea.domain.document.service.DocumentService;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+
+import com.aidea.aidea.domain.documents.dto.YjsUpdateMessage;
+import com.aidea.aidea.domain.documents.service.DocumentService;
 
 
 @Controller
