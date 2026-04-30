@@ -5,8 +5,9 @@ info:
     Aidea - AI 기반 기획 문서 협업 도구 API 명세서
 
     ## 인증 방식
-    - OAuth2 소셜 로그인 (Google, Kakao)
-    - JWT Bearer Token (Access Token: 30분, Refresh Token: 14일)
+    - OAuth2 소셜 로그인 (GitHub)
+    - JWT HttpOnly Cookie (Access Token: 30분, Refresh Token: 14일)
+    - 인증이 필요한 API는 브라우저가 access_token 쿠키를 자동으로 전송합니다.
 
     ## 공통 응답 형식
     ```json
@@ -43,11 +44,11 @@ tags:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: "Authorization: Bearer {accessToken}"
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: "HttpOnly 쿠키로 전달되는 JWT Access Token. 브라우저가 자동으로 전송합니다."
 
   schemas:
     ApiResponse:
@@ -65,21 +66,6 @@ components:
           type: object
           nullable: true
 
-    TokenResponse:
-      type: object
-      properties:
-        accessToken:
-          type: string
-        refreshToken:
-          type: string
-        tokenType:
-          type: string
-          example: Bearer
-        expiresIn:
-          type: integer
-          format: int64
-          example: 1800000
-
     UserResponse:
       type: object
       properties:
@@ -96,7 +82,7 @@ components:
           nullable: true
         provider:
           type: string
-          enum: [LOCAL, GOOGLE, KAKAO]
+          enum: [LOCAL, GITHUB, GOOGLE, KAKAO]
 
     TeamspaceCreateRequest:
       type: object
@@ -288,62 +274,95 @@ components:
           type: string
 
 security:
-  - bearerAuth: []
+  - cookieAuth: []
 
 paths:
   # ===== Auth =====
-  /api/oauth2/callback/{provider}:
+  /api/oauth2/authorize/github:
     get:
       tags: [Auth]
-      summary: 소셜 로그인 콜백
+      summary: GitHub 로그인 시작
       description: |
-        소셜 로그인 인증 후 서버가 처리하는 콜백 URL (직접 호출 X)
+        GitHub OAuth 인증 페이지로 리다이렉트합니다.
 
-        **흐름:**
-        1. 프론트에서 소셜 로그인 버튼 클릭 → 소셜 로그인 페이지 이동
-        2. 인증 완료 → 서버 콜백 URL로 리다이렉트
-        3. 서버가 JWT 발급 후 프론트로 리다이렉트:
-           `http://localhost:3000/oauth/callback?accessToken=...&refreshToken=...`
+        **프론트 사용법:**
+        로그인 버튼 클릭 시 이 URL로 페이지를 이동시킵니다.
+        ```
+        window.location.href = 'http://localhost:8080/api/oauth2/authorize/github';
+        ```
+      security: []
+      responses:
+        '302':
+          description: GitHub OAuth 인증 페이지로 리다이렉트
+          headers:
+            Location:
+              schema:
+                type: string
+              example: "https://github.com/login/oauth/authorize?client_id=..."
+
+  /api/oauth2/callback/github:
+    get:
+      tags: [Auth]
+      summary: GitHub OAuth 콜백 (직접 호출 X)
+      description: |
+        GitHub 인증 완료 후 GitHub이 자동으로 호출하는 콜백 URL입니다.
+        프론트에서 직접 호출하지 않습니다.
+
+        **서버 동작:**
+        1. GitHub에서 전달받은 code로 GitHub access token 교환
+        2. GitHub 사용자 정보 조회
+        3. JWT 생성 후 httpOnly 쿠키 설정 (URL에 토큰 노출 없음):
+           - `access_token`: HttpOnly; Secure; SameSite=Lax; Max-Age=1800 (30분)
+           - `refresh_token`: HttpOnly; Secure; SameSite=Lax; Max-Age=1209600 (14일)
+        4. 프론트로 리다이렉트: `http://localhost:5173/`
       security: []
       parameters:
-        - name: provider
-          in: path
+        - name: code
+          in: query
           required: true
           schema:
             type: string
-            enum: [google, kakao]
+          description: GitHub에서 전달하는 인증 코드
       responses:
         '302':
-          description: 프론트엔드로 리다이렉트 (accessToken, refreshToken 쿼리 파라미터 포함)
+          description: 인증 성공 - 프론트엔드 홈으로 리다이렉트
+          headers:
+            Location:
+              schema:
+                type: string
+              example: "http://localhost:5173/"
+            Set-Cookie:
+              schema:
+                type: string
+              examples:
+                accessToken:
+                  value: "access_token=eyJ...; HttpOnly; Secure; SameSite=Lax; Max-Age=1800"
+                refreshToken:
+                  value: "refresh_token=eyJ...; HttpOnly; Secure; SameSite=Lax; Max-Age=1209600"
 
   /api/auth/refresh:
     post:
       tags: [Auth]
       summary: 토큰 갱신
-      description: Refresh Token으로 새로운 Access Token을 발급받습니다.
+      description: |
+        refresh_token 쿠키를 사용하여 새로운 access_token을 발급받습니다.
+        요청 바디 없이 브라우저가 refresh_token 쿠키를 자동으로 전송합니다.
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [refreshToken]
-              properties:
-                refreshToken:
-                  type: string
       responses:
         '200':
           description: 토큰 갱신 성공
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              example: "access_token=eyJ...; HttpOnly; Secure; SameSite=Lax; Max-Age=1800"
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/ApiResponse'
-                  - type: object
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/TokenResponse'
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                success: true
+                message: "토큰이 갱신되었습니다."
         '401':
           description: 유효하지 않은 토큰
           content:
@@ -366,10 +385,19 @@ paths:
     post:
       tags: [Auth]
       summary: 로그아웃
-      description: 현재 사용자의 Refresh Token을 무효화합니다.
+      description: access_token, refresh_token 쿠키를 만료시킵니다.
       responses:
         '200':
           description: 로그아웃 성공
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              examples:
+                clearAccessToken:
+                  value: "access_token=; Max-Age=0"
+                clearRefreshToken:
+                  value: "refresh_token=; Max-Age=0"
           content:
             application/json:
               schema:
@@ -382,7 +410,9 @@ paths:
     get:
       tags: [Auth]
       summary: 내 정보 조회
-      description: 현재 로그인된 사용자 정보를 조회합니다.
+      description: |
+        현재 로그인된 사용자 정보를 조회합니다.
+        비로그인 상태 확인용으로도 사용합니다 (401 응답으로 판단).
       responses:
         '200':
           description: 사용자 정보
@@ -395,6 +425,12 @@ paths:
                     properties:
                       data:
                         $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: 비로그인 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # ===== Teamspace =====
   /api/teamspaces:
