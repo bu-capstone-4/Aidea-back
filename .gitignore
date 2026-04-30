@@ -36,6 +36,10 @@ out/
 ### VS Code ###
 .vscode/
 
+### Environment ###
+.env
+app.jar
+
 
 ### macOS ###
 .DS_Store
