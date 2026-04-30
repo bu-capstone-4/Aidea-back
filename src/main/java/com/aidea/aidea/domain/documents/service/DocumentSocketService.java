@@ -1,4 +1,4 @@
-package com.aidea.aidea.domain.document.service;
+package com.aidea.aidea.domain.documents.service;
 
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -8,17 +8,17 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.aidea.aidea.domain.document.entity.Document;
-import com.aidea.aidea.domain.document.entity.DocumentUpdate;
-import com.aidea.aidea.domain.document.repository.DocumentRepository;
-import com.aidea.aidea.domain.document.repository.DocumentUpdateRepository;
+import com.aidea.aidea.domain.documents.entity.Document;
+import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
+import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class DocumentService {
+public class DocumentSocketService {
 
     private final DocumentRepository documentRepository;
     private final DocumentUpdateRepository documentUpdateRepository;

@@ -1,4 +1,4 @@
-package com.aidea.aidea.domain.document.dto;
+package com.aidea.aidea.domain.documents.dto;
 
 import java.util.List;
 

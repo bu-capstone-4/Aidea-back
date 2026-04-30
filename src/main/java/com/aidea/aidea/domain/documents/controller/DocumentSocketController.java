@@ -1,7 +1,4 @@
-package com.aidea.aidea.domain.document.controller;
-
-import java.util.Base64;
-import java.util.List;
+package com.aidea.aidea.domain.documents.controller;
 
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -10,26 +7,22 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 
-import com.aidea.aidea.domain.document.dto.YjsUpdateMessage;
-import com.aidea.aidea.domain.document.service.DocumentService;
+import com.aidea.aidea.domain.documents.dto.YjsUpdateMessage;
+import com.aidea.aidea.domain.documents.service.DocumentSocketService;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.Base64;
+import java.util.List;
 
 
 @Controller
 @RequiredArgsConstructor
-public class DocumentController {
+public class DocumentSocketController {
 
-    private final DocumentService documentService;
+    private final DocumentSocketService documentService;
     private final SimpMessagingTemplate messagingTemplate; // 특정 결로로 메시지 직접 전송
-
-    @GetMapping("/")
-    public String runTest() {
-        return "/test/document/live-test";
-    }
     
-
     @MessageMapping("/doc/{docId}/update")
     public void handleUpdate(
             @DestinationVariable String docId,
@@ -49,5 +42,4 @@ public class DocumentController {
         List<String> updates = documentService.getSnapshotAsBase64List(docId);
         return new YjsUpdateMessage(docId, null, updates);
     }
-
 }

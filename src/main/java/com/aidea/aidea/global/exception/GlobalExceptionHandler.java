@@ -1,35 +1,38 @@
 package com.aidea.aidea.global.exception;
 
-import com.aidea.aidea.global.dto.ApiResponse;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@Slf4j
+import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1. 우리가 만든 CustomException 처리
-    @ExceptionHandler(CustomException.class)
-    public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
-        ErrorCode errorCode = e.getErrorCode();
-
-        log.warn("CustomException 발생: {} - {}", errorCode.getCode(), errorCode.getMessage());
+    // 1. 모든 RuntimeException 처리
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleRuntimeException(RuntimeException e) {
 
         return ResponseEntity
-                .status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
+                .badRequest()
+                .body(TestGlobalResponseDTO.error("RUNTIME_ERROR", e.getMessage()));
     }
 
-    // 2. 예상 못한 에러 (서버 터졌을 때)
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
+    // 2. IllegalArgumentException 처리 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleIllegalArgumentException(IllegalArgumentException e) {
 
-        log.error("예상치 못한 오류 발생: ", e);
+        return ResponseEntity
+                .badRequest()
+                .body(TestGlobalResponseDTO.error("INVALID_ARGUMENT", e.getMessage()));
+    }
+
+    // 3. 모든 예외
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleException(Exception e) {
 
         return ResponseEntity
                 .status(500)
-                .body(ApiResponse.error("INTERNAL_ERROR", "서버 내부 오류가 발생했습니다."));
+                .body(TestGlobalResponseDTO.error("INTERNAL_SERVER_ERROR", "서버 오류 발생"));
     }
 }
