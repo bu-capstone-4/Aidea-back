@@ -1,0 +1,29 @@
+services:
+
+  # ── MySQL (개발용) ────────────────────────────────────────────────────────────
+  # Spring Boot는 로컬에서 ./gradlew bootRun 으로 실행합니다.
+  mysql:
+    image: mysql:8.0
+    container_name: aidea-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: aidea_db
+      MYSQL_USER: aidea
+      MYSQL_PASSWORD: aidea
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+
+volumes:
+  mysql_dev_data:
