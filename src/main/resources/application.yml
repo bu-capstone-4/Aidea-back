@@ -2,29 +2,54 @@ spring:
   application:
     name: aidea
 
+  # --- 데이터소스 (로컬 개발용) ---
   datasource:
-    url: jdbc:h2:mem:yjsdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: 1234
+    url: jdbc:mysql://localhost:3306/idea?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: root
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: update
     properties:
       hibernate:
-        "[format_sql]": true
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    show-sql: true
+    open-in-view: false
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
+  # --- OAuth2 클라이언트 설정 ---
   security:
-    user:
-      name: admin
-      password: 1234
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID:your-github-client-id}
+            client-secret: ${GITHUB_CLIENT_SECRET:your-github-client-secret}
+            scope: read:user, user:email
 
+# --- JWT 설정 ---
+jwt:
+  secret: ${JWT_SECRET:my-super-secret-key-for-jwt-token-generation-must-be-256-bits-long!!}
+  access-token-expiry: 1800000      # 30분 (ms)
+  refresh-token-expiry: 1209600000  # 14일 (ms)
+
+# --- 서버 설정 ---
 server:
   port: 8080
+
+# --- Swagger ---
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# --- 로깅 ---
+logging:
+  level:
+    com.aidea.idea: DEBUG
+    org.springframework.security: DEBUG
