@@ -80,7 +80,39 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} \
             "cd ~/app && ./deploy.sh ${{ steps.build-image.outputs.image }}"
 
-      # 10. Discord 성공 알림
+      # 10. 배포 실패 시 EC2 진단 로그 수집
+      - name: Collect diagnostic logs on failure
+        if: failure()
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash << 'EOF'
+            echo "======== 컨테이너 상태 ========"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+
+            echo ""
+            echo "======== 메모리 사용량 ========"
+            free -h
+
+            echo ""
+            echo "======== MySQL 로그 (최근 30줄) ========"
+            docker logs aidea-mysql --tail=30 2>&1 || echo "[MySQL 컨테이너 없음]"
+
+            echo ""
+            echo "======== Spring Blue 로그 (최근 80줄) ========"
+            docker logs aidea-spring-blue --tail=80 2>&1 || echo "[spring-blue 컨테이너 없음]"
+
+            echo ""
+            echo "======== Spring Green 로그 (최근 80줄) ========"
+            docker logs aidea-spring-green --tail=80 2>&1 || echo "[spring-green 컨테이너 없음]"
+
+            echo ""
+            echo "======== 종료된 컨테이너 ExitCode / OOMKilled ========"
+            for name in aidea-spring-blue aidea-spring-green aidea-mysql; do
+              info=$(docker inspect "$name" --format="$name  ExitCode={{.State.ExitCode}}  OOMKilled={{.State.OOMKilled}}" 2>/dev/null || echo "$name  [없음]")
+              echo "$info"
+            done
+          EOF
+
+      # 11. Discord 성공 알림
       - name: Discord 성공 알림
         if: success()
         run: |
