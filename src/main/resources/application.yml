@@ -2,21 +2,23 @@ spring:
   application:
     name: aidea
 
-  # --- 데이터소스 (로컬 개발용) ---
   datasource:
-    url: jdbc:mysql://localhost:3306/idea?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
-    username: root
+    url: ${DB_URL:jdbc:mysql://localhost:3306/aidea_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-timeout: 30000
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
-    show-sql: true
+    show-sql: ${SHOW_SQL:true}
     open-in-view: false
 
   # --- OAuth2 클라이언트 설정 ---
@@ -38,6 +40,20 @@ jwt:
 # --- 서버 설정 ---
 server:
   port: 8080
+
+# --- 프론트엔드 URL (OAuth 리다이렉트) ---
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173}
+
+# --- Actuator ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 # --- Swagger ---
 springdoc:

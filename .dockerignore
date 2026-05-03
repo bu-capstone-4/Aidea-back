@@ -1,0 +1,34 @@
+# Dockerfile은 app.jar만 복사하므로 나머지는 전부 제외
+
+# 소스 코드 / 빌드 도구
+src/
+build/
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+settings.gradle
+build.gradle
+
+# 인프라 / 배포 관련
+.github/
+nginx/
+scripts/
+certbot/
+
+# 환경 변수 (보안)
+.env
+.env.example
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+*.iml
+bin/
+
+# 문서
+*.md
