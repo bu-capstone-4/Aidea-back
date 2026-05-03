@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO:update}
+      ddl-auto: ${DDL_AUTO:create}
     properties:
       hibernate:
         format_sql: true
@@ -27,13 +27,13 @@ spring:
       client:
         registration:
           github:
-            client-id: ${GITHUB_CLIENT_ID:your-github-client-id}
-            client-secret: ${GITHUB_CLIENT_SECRET:your-github-client-secret}
-            scope: read:user, user:email
+            client-id: ${GITHUB_CLIENT_ID:clientid}
+            client-secret: ${GITHUB_CLIENT_SECRET:secret}
+            scope: read:user, user:email, repo, project
 
 # --- JWT 설정 ---
 jwt:
-  secret: ${JWT_SECRET:my-super-secret-key-for-jwt-token-generation-must-be-256-bits-long!!}
+  secret: ${JWT_SECRET:jwtsecret}
   access-token-expiry: 1800000      # 30분 (ms)
   refresh-token-expiry: 1209600000  # 14일 (ms)
 
@@ -44,6 +44,11 @@ server:
 # --- 프론트엔드 URL (OAuth 리다이렉트) ---
 frontend:
   url: ${FRONTEND_URL:http://localhost:5173}
+
+# --- 쿠키 설정 ---
+app:
+  cookie:
+    secure: ${COOKIE_SECURE:false}
 
 # --- Actuator ---
 management:
