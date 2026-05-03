@@ -21,7 +21,6 @@ spring:
     show-sql: ${SHOW_SQL:true}
     open-in-view: false
 
-  # --- OAuth2 클라이언트 설정 ---
   security:
     oauth2:
       client:
@@ -31,26 +30,21 @@ spring:
             client-secret: ${GITHUB_CLIENT_SECRET:secret}
             scope: read:user, user:email, repo, project
 
-# --- JWT 설정 ---
 jwt:
   secret: ${JWT_SECRET:jwtsecret}
-  access-token-expiry: 1800000      # 30분 (ms)
-  refresh-token-expiry: 1209600000  # 14일 (ms)
+  access-token-expiry: 1800000
+  refresh-token-expiry: 1209600000
 
-# --- 서버 설정 ---
 server:
   port: 8080
 
-# --- 프론트엔드 URL (OAuth 리다이렉트) ---
 frontend:
   url: ${FRONTEND_URL:http://localhost:5173}
 
-# --- 쿠키 설정 ---
 app:
   cookie:
     secure: ${COOKIE_SECURE:false}
 
-# --- Actuator ---
 management:
   endpoints:
     web:
@@ -60,7 +54,6 @@ management:
     health:
       show-details: never
 
-# --- Swagger ---
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -69,8 +62,7 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
-# --- 로깅 ---
 logging:
   level:
-    com.aidea.idea: DEBUG
+    com.aidea.aidea: DEBUG
     org.springframework.security: DEBUG
