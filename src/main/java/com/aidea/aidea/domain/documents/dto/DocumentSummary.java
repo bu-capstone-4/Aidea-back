@@ -7,13 +7,6 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
-
-/*
-    문서 요약 응답 dto
-
-*/
-
-
 @Getter
 @AllArgsConstructor
 public class DocumentSummary {
@@ -22,7 +15,7 @@ public class DocumentSummary {
     private DocumentType type;
     private String title;
     private LocalDateTime updatedAt;
-    private String updatedBy;
+    private String updatedBy; // User.id (Long) → String
 
     public static DocumentSummary from(Document document) {
         return new DocumentSummary(
@@ -30,7 +23,9 @@ public class DocumentSummary {
                 document.getType(),
                 document.getTitle(),
                 document.getUpdatedAt(),
-                document.getUpdatedBy()
+                document.getUpdatedBy() != null
+                        ? document.getUpdatedBy().getId().toString()
+                        : null
         );
     }
 }
