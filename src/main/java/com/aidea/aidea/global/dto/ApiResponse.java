@@ -33,6 +33,15 @@ public class ApiResponse<T> {
                 .build();
     }
 
+    // Void 응답에 커스텀 메시지를 담을 때 사용
+    public static ApiResponse<Void> ok(String message) {
+        return ApiResponse.<Void>builder()
+                .success(true)
+                .code("SUCCESS")
+                .message(message)
+                .build();
+    }
+
     public static <T> ApiResponse<T> ok(T data, String message) {
         return ApiResponse.<T>builder()
                 .success(true)

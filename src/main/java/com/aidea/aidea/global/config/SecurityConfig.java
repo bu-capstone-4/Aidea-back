@@ -49,6 +49,7 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/api/auth/refresh",
+                                "/ws/**",           // WebSocket — HandshakeInterceptor에서 인증 처리
                                 "/favicon.ico",
                                 "/error",
                                 "/h2-console/**",
