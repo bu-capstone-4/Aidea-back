@@ -1,15 +1,12 @@
 package com.aidea.aidea.domain.documents.repository;
 
-import java.util.List;
-import java.util.Optional;
-
+import com.aidea.aidea.domain.documents.entity.Document;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.aidea.aidea.domain.documents.entity.Document;
+import java.util.List;
 
-public interface DocumentRepository extends JpaRepository<Document, String>{
+public interface DocumentRepository extends JpaRepository<Document, String> {
 
-     List<Document> findByTeamspaceId(String teamspaceId);
-
-     Optional<Document> findById(String id);
+    // teamspace.id = :teamspaceId 로 Spring Data JPA가 자동 변환
+    List<Document> findByTeamspaceId(String teamspaceId);
 }
