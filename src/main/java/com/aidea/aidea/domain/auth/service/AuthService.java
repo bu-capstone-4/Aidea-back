@@ -1,6 +1,6 @@
 package com.aidea.aidea.domain.auth.service;
 
-import com.aidea.aidea.domain.auth.dto.response.TokenResponse;
+import com.aidea.aidea.domain.auth.dto.response.UserResponse;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.global.exception.CustomException;
@@ -18,8 +18,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
-    public TokenResponse refreshToken(String refreshToken) {
-
+    public String refreshToken(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
             throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
@@ -33,15 +32,20 @@ public class AuthService {
             throw new CustomException(ErrorCode.REFRESH_TOKEN_MISMATCH);
         }
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
+        return jwtTokenProvider.createAccessToken(userId);
+    }
 
-        user.updateRefreshToken(newRefreshToken);
-        userRepository.save(user);
+    @Transactional
+    public void logout(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        user.updateRefreshToken(null);
+    }
 
-        return TokenResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .build();
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return UserResponse.from(user);
     }
 }

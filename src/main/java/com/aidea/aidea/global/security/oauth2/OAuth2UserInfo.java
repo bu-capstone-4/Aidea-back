@@ -12,9 +12,15 @@ public class OAuth2UserInfo {
         this.attributes = attributes;
     }
 
-    //GitHub 고유 ID 꺼내기
+    //GitHub 고유 ID 꺼내기 (GitHub는 Integer로 반환하므로 String 변환)
     public String getId() {
-        return (String) attributes.get("id");
+        Object id = attributes.get("id");
+        return id != null ? String.valueOf(id) : null;
+    }
+
+    //GitHub 사용자명 꺼내기 (API URL 구성에 사용)
+    public String getLogin() {
+        return (String) attributes.get("login");
     }
 
     //이메일 꺼내기
