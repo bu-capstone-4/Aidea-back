@@ -5,11 +5,13 @@ import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
 import com.aidea.aidea.global.security.jwt.JwtTokenProvider;
+import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
@@ -38,6 +40,9 @@ public class DocumentHandshakeInterceptor implements HandshakeInterceptor {
         log.debug("[WS] handshake attempt docId={} remote={}", docId, request.getRemoteAddress());
 
         String token = extractToken(request);
+        if (token == null || token.isBlank()) {
+            token = extractTokenFromCookie(request);
+        }
         if (token == null || !jwtTokenProvider.validateToken(token)) {
             log.warn("[WS] handshake rejected docId={} reason=INVALID_TOKEN", docId);
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
@@ -85,6 +90,16 @@ public class DocumentHandshakeInterceptor implements HandshakeInterceptor {
             for (String param : query.split("&")) {
                 if (param.startsWith("token=")) return param.substring(6);
             }
+        }
+        return null;
+    }
+
+    private String extractTokenFromCookie(ServerHttpRequest request) {
+        if (!(request instanceof ServletServerHttpRequest servletRequest)) return null;
+        Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+        if (cookies == null) return null;
+        for (Cookie cookie : cookies) {
+            if ("access_token".equals(cookie.getName())) return cookie.getValue();
         }
         return null;
     }
