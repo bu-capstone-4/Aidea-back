@@ -16,7 +16,4 @@ app:
   cookie:
     secure: false
 
-logging:
-  level:
-    com.aidea: DEBUG
-    org.springframework.security: DEBUG
+# 로그 레벨은 logback-spring.xml 의 springProfile name="dev" 블록에서 관리합니다.

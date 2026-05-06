@@ -5,6 +5,7 @@ import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -20,11 +21,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DocumentWebSocketHandler extends TextWebSocketHandler {
 
-    // 문서별 연결된 세션 목록 — ConcurrentHashMap.newKeySet()으로 생성해야 thread-safe
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
 
@@ -37,7 +38,11 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String docId = (String) session.getAttributes().get("docId");
+        String userId = (String) session.getAttributes().get("userId");
+        MemberRole role = (MemberRole) session.getAttributes().get("role");
+
         docSessions.computeIfAbsent(docId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        log.info("[WS] connected sessionId={} docId={} userId={} role={}", session.getId(), docId, userId, role);
 
         sendDocInit(session, docId);
     }
@@ -59,10 +64,13 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String docId = (String) session.getAttributes().get("docId");
+        String userId = (String) session.getAttributes().get("userId");
+
         Set<WebSocketSession> sessions = docSessions.get(docId);
         if (sessions != null) {
             sessions.remove(session);
         }
+        log.info("[WS] disconnected sessionId={} docId={} userId={} status={}", session.getId(), docId, userId, status.getCode());
     }
 
     // --- 내부 처리 메서드 ---
@@ -79,6 +87,9 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
             updates.add(Base64.getEncoder().encodeToString(u));
         }
 
+        log.debug("[WS] sendDocInit sessionId={} docId={} snapshotPresent={} pendingUpdates={}",
+                session.getId(), docId, snapshot != null, dbUpdates.size());
+
         Map<String, Object> event = Map.of("type", "doc:init", "updates", updates);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
@@ -86,21 +97,23 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
     private void handleDocUpdate(WebSocketSession session, Map<String, Object> payload) throws Exception {
         MemberRole role = (MemberRole) session.getAttributes().get("role");
 
-        // VIEWER는 업데이트 불가 — 연결은 유지하되 수신 메시지 무시
-        if (role == MemberRole.VIEWER) return;
+        if (role == MemberRole.VIEWER) {
+            String userId = (String) session.getAttributes().get("userId");
+            String docId = (String) session.getAttributes().get("docId");
+            log.warn("[WS] doc:update rejected userId={} docId={} reason=VIEWER_NOT_ALLOWED", userId, docId);
+            return;
+        }
 
         String docId = (String) session.getAttributes().get("docId");
         String clientId = (String) session.getAttributes().get("userId");
         String base64Update = (String) payload.get("update");
         byte[] updateBinary = Base64.getDecoder().decode(base64Update);
 
-        // 1. 인메모리 버퍼에 push (Phase 3 스케줄러가 배치 머지 시 사용)
-        updateBuffer.push(docId, updateBinary);
+        log.debug("[WS] doc:update docId={} clientId={} bytes={}", docId, clientId, updateBinary.length);
 
-        // 2. DB에 영속 저장 (서버 재시작 시 버퍼 복구용 영속 로그)
+        updateBuffer.push(docId, updateBinary);
         documentService.saveUpdate(docId, updateBinary, clientId);
 
-        // 3. 같은 문서의 다른 세션에 브로드캐스트 (발신자 제외)
         String broadcastJson = objectMapper.writeValueAsString(
                 Map.of("type", "doc:update", "update", base64Update)
         );
@@ -114,7 +127,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
                 try {
                     s.sendMessage(message);
                 } catch (IOException e) {
-                    // 끊긴 세션은 afterConnectionClosed에서 정리됨
+                    log.warn("[WS] broadcast failed sessionId={} docId={}", s.getId(), docId);
                 }
             }
         }
@@ -128,7 +141,9 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
             if (s.isOpen()) {
                 try {
                     s.sendMessage(message);
-                } catch (IOException ignored) {}
+                } catch (IOException e) {
+                    log.warn("[WS] pushToDocument failed sessionId={} docId={}", s.getId(), docId);
+                }
             }
         }
     }

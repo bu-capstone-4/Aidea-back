@@ -18,6 +18,7 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.element.Paragraph;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,6 +44,7 @@ public class DocumentService {
 
     public List<DocumentSummary> getDocuments(String teamspaceId, String requestUserId) {
         requireMembership(teamspaceId, parseUserId(requestUserId));
+        log.debug("[DOC] getDocuments userId={} teamspaceId={}", requestUserId, teamspaceId);
         return documentRepository.findByTeamspaceId(teamspaceId).stream()
                 .map(DocumentSummary::from)
                 .toList();
@@ -60,12 +63,17 @@ public class DocumentService {
                 : req.getTitle();
 
         Document doc = Document.create(UUID.randomUUID().toString(), teamspace, req.getType(), title);
-        return DocumentCreateResponse.from(documentRepository.save(doc));
+        DocumentCreateResponse response = DocumentCreateResponse.from(documentRepository.save(doc));
+
+        log.info("[DOC] create userId={} teamspaceId={} docId={} type={} title={}",
+                userId, teamspaceId, response.getId(), req.getType(), title);
+        return response;
     }
 
     public DocumentDetail getDocument(String docId, String requestUserId) {
         Document doc = findDocument(docId);
         requireMembership(doc.getTeamspace().getId(), parseUserId(requestUserId));
+        log.debug("[DOC] getDocument userId={} docId={}", requestUserId, docId);
         return DocumentDetail.from(doc);
     }
 
@@ -79,36 +87,43 @@ public class DocumentService {
         doc.setTitle(req.getTitle());
         doc.setUpdatedAt(LocalDateTime.now());
         doc.setUpdatedBy(user);
+
+        log.info("[DOC] updateTitle userId={} docId={} title={}", userId, docId, req.getTitle());
         return DocumentUpdateResponse.from(doc);
     }
 
     @Transactional
     public void deleteDocument(String docId, String requestUserId) {
+        Long userId = parseUserId(requestUserId);
         Document doc = findDocument(docId);
-        requireRole(doc.getTeamspace().getId(), parseUserId(requestUserId), MemberRole.OWNER);
+        requireRole(doc.getTeamspace().getId(), userId, MemberRole.OWNER);
 
         if (doc.getType() == DocumentType.IDEA) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
         }
         documentRepository.delete(doc);
+        log.info("[DOC] delete userId={} docId={}", userId, docId);
     }
 
-    // ───── WebSocket 핸들러에서 위임받는 Yjs 메서드 (Phase 2에서 호출) ─────
+    // ───── WebSocket 핸들러에서 위임받는 Yjs 메서드 ─────
 
     @Transactional
     public void saveUpdate(String docId, byte[] updateBinary, String clientId) {
         Document doc = documentRepository.findById(docId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
         documentUpdateRepository.save(DocumentUpdate.create(doc, updateBinary, clientId));
+        log.info("[DOC] saveUpdate docId={} clientId={} bytes={}", docId, clientId, updateBinary.length);
     }
 
     public byte[] getSnapshot(String docId) {
+        log.debug("[DOC] getSnapshot docId={}", docId);
         return documentRepository.findById(docId)
                 .map(Document::getYjsSnapshot)
                 .orElse(null);
     }
 
     public List<byte[]> getPendingUpdates(String docId) {
+        log.debug("[DOC] getPendingUpdates docId={}", docId);
         return documentUpdateRepository.findByDocumentIdOrderByIdAsc(docId)
                 .stream().map(DocumentUpdate::getUpdateBinary).toList();
     }
@@ -119,6 +134,7 @@ public class DocumentService {
         Document doc = findDocument(docId);
         requireMembership(doc.getTeamspace().getId(), parseUserId(requestUserId));
 
+        log.info("[DOC] export userId={} docId={} format={}", requestUserId, docId, format);
         if ("md".equalsIgnoreCase(format)) return convertToMarkdown(doc);
         if ("pdf".equalsIgnoreCase(format)) return convertToPdf(doc);
         throw new IllegalArgumentException("지원하지 않는 포맷입니다.");
@@ -175,6 +191,7 @@ public class DocumentService {
             doc.close();
             return baos.toByteArray();
         } catch (Exception e) {
+            log.error("[DOC] convertToPdf docId={} failed", document.getId(), e);
             throw new RuntimeException("PDF 생성 실패", e);
         }
     }
