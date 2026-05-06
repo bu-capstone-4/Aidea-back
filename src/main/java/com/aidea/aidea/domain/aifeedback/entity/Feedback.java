@@ -2,8 +2,8 @@ package com.aidea.aidea.domain.aifeedback.entity;
 
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.documents.entity.Document;
-import com.aidea.aidea.domain.aifeedback.entity.converter.QuestionsConverter;
-import com.aidea.aidea.domain.aifeedback.entity.converter.AnswersConverter;
+import com.aidea.aidea.domain.aifeedback.converter.QuestionsConverter;
+import com.aidea.aidea.domain.aifeedback.converter.AnswersConverter;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;

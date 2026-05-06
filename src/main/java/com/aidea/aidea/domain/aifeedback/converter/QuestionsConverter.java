@@ -1,4 +1,4 @@
-package com.aidea.aidea.domain.aifeedback.entity.converter;
+package com.aidea.aidea.domain.aifeedback.converter;
 
 import com.aidea.aidea.domain.aifeedback.entity.Question;
 import com.fasterxml.jackson.core.JsonProcessingException;
