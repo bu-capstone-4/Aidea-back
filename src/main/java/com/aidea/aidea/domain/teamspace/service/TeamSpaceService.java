@@ -5,6 +5,7 @@ import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpaceStatus;
 import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
+import com.aidea.aidea.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,14 +22,16 @@ public class TeamSpaceService {
 
     public TeamSpaceCreateResponse create(TeamSpaceCreateRequest request) {
 
-        // 팀스페이스 생성
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw new IllegalArgumentException(ErrorCode.INVALID_INPUT.getMessage());
+        }
+
         TeamSpace teamSpace = TeamSpace.builder()
                 .teamspaceId("ts_" + UUID.randomUUID())
                 .name(request.getName())
                 .status(TeamSpaceStatus.CREATING)
                 .build();
 
-        // Document 생성 (요청받은 타입 기준)
         if (request.getDocumentTypes() != null) {
             List<Document> documents = request.getDocumentTypes().stream()
                     .map(type -> Document.builder()
@@ -56,7 +59,7 @@ public class TeamSpaceService {
 
     public TeamSpaceDetailResponse get(String id) {
         TeamSpace ts = teamSpaceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("TeamSpace not found"));
+                .orElseThrow(() -> new RuntimeException(ErrorCode.TEAMSPACE_NOT_FOUND.getMessage()));
 
         List<TeamSpaceDetailResponse.DocumentSummary> docs =
                 ts.getDocuments().stream()
@@ -90,14 +93,18 @@ public class TeamSpaceService {
 
     public TeamSpaceCreateResponse update(String id, TeamSpaceUpdateRequest request) {
         TeamSpace ts = teamSpaceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("TeamSpace not found"));
+                .orElseThrow(() -> new RuntimeException(ErrorCode.TEAMSPACE_NOT_FOUND.getMessage()));
 
-        if (request.getName() != null) {
+        if (request.getName() != null && !request.getName().isBlank()) {
             ts.setName(request.getName());
         }
 
         if (request.getStatus() != null) {
-            ts.setStatus(TeamSpaceStatus.valueOf(request.getStatus()));
+            try {
+                ts.setStatus(TeamSpaceStatus.valueOf(request.getStatus()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(ErrorCode.INVALID_INPUT.getMessage());
+            }
         }
 
         TeamSpace saved = teamSpaceRepository.save(ts);
@@ -111,6 +118,9 @@ public class TeamSpaceService {
     }
 
     public void delete(String id) {
+        if (!teamSpaceRepository.existsById(id)) {
+            throw new RuntimeException(ErrorCode.TEAMSPACE_NOT_FOUND.getMessage());
+        }
         teamSpaceRepository.deleteById(id);
     }
 
