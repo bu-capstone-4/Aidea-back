@@ -1,6 +1,6 @@
 package com.aidea.aidea.domain.teamspace.service;
 
-import com.aidea.aidea.domain.document.entity.Document;
+import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpaceStatus;
@@ -8,7 +8,9 @@ import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,11 +20,29 @@ public class TeamSpaceService {
     private final TeamSpaceRepository teamSpaceRepository;
 
     public TeamSpaceCreateResponse create(TeamSpaceCreateRequest request) {
+
+        // 팀스페이스 생성
         TeamSpace teamSpace = TeamSpace.builder()
-                .teamspaceId(request.getTeamspaceId())
+                .teamspaceId("ts_" + UUID.randomUUID())
                 .name(request.getName())
                 .status(TeamSpaceStatus.CREATING)
                 .build();
+
+        // Document 생성 (요청받은 타입 기준)
+        if (request.getDocumentTypes() != null) {
+            List<Document> documents = request.getDocumentTypes().stream()
+                    .map(type -> Document.builder()
+                            .id(UUID.randomUUID().toString())
+                            .teamspaceId(teamSpace.getTeamspaceId())
+                            .type(type)
+                            .title(type.name())
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build())
+                    .collect(Collectors.toList());
+
+            teamSpace.getDocuments().addAll(documents);
+        }
 
         TeamSpace saved = teamSpaceRepository.save(teamSpace);
 
@@ -73,23 +93,11 @@ public class TeamSpaceService {
                 .orElseThrow(() -> new RuntimeException("TeamSpace not found"));
 
         if (request.getName() != null) {
-            ts = TeamSpace.builder()
-                    .teamspaceId(ts.getTeamspaceId())
-                    .name(request.getName())
-                    .status(ts.getStatus())
-                    .documents(ts.getDocuments())
-                    .createdAt(ts.getCreatedAt())
-                    .build();
+            ts.setName(request.getName());
         }
 
         if (request.getStatus() != null) {
-            ts = TeamSpace.builder()
-                    .teamspaceId(ts.getTeamspaceId())
-                    .name(ts.getName())
-                    .status(TeamSpaceStatus.valueOf(request.getStatus()))
-                    .documents(ts.getDocuments())
-                    .createdAt(ts.getCreatedAt())
-                    .build();
+            ts.setStatus(TeamSpaceStatus.valueOf(request.getStatus()));
         }
 
         TeamSpace saved = teamSpaceRepository.save(ts);
@@ -108,11 +116,11 @@ public class TeamSpaceService {
 
     private TeamSpaceDetailResponse.DocumentSummary toDocumentSummary(Document d) {
         return TeamSpaceDetailResponse.DocumentSummary.builder()
-                .id(d.getDocId())
-                .type(null)
-                .title(null)
+                .id(d.getId())
+                .type(d.getType() != null ? d.getType().name() : null)
+                .title(d.getTitle())
                 .updatedAt(d.getUpdatedAt())
-                .updatedBy(null)
+                .updatedBy(d.getUpdatedBy())
                 .build();
     }
 }
