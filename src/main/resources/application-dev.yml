@@ -1,0 +1,22 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            redirect-uri: http://localhost:8080/login/oauth2/code/github
+
+frontend:
+  url: http://localhost:5173
+
+app:
+  cookie:
+    secure: false
+
+logging:
+  level:
+    com.aidea: DEBUG
+    org.springframework.security: DEBUG

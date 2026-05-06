@@ -1,0 +1,22 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            redirect-uri: https://aidea-bu.duckdns.org/login/oauth2/code/github
+
+frontend:
+  url: ${FRONTEND_URL}
+
+app:
+  cookie:
+    secure: true
+
+logging:
+  level:
+    com.aidea: INFO
+    org.springframework.security: WARN

@@ -3,28 +3,66 @@ spring:
     name: aidea
 
   datasource:
-    url: jdbc:h2:mem:yjsdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: 1234
+    url: ${DB_URL:jdbc:mysql://localhost:3306/aidea_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-timeout: 30000
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: ${DDL_AUTO:create}
     properties:
       hibernate:
-        "[format_sql]": true
-
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+    show-sql: ${SHOW_SQL:true}
+    open-in-view: false
 
   security:
-    user:
-      name: admin
-      password: 1234
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID:clientid}
+            client-secret: ${GITHUB_CLIENT_SECRET:secret}
+            scope: read:user, user:email, repo, project
+
+jwt:
+  secret: ${JWT_SECRET:jwtsecret}
+  access-token-expiry: 1800000
+  refresh-token-expiry: 1209600000
 
 server:
   port: 8080
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173}
+
+app:
+  cookie:
+    secure: ${COOKIE_SECURE:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.aidea.aidea: DEBUG
+    org.springframework.security: DEBUG
