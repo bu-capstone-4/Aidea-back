@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <property name="LOG_PATTERN"
+    <!-- ── 색상이 적용되지 않는 기본 패턴 (파일용) ── -->
+    <property name="FILE_LOG_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+
+    <!-- ── 색상이 적용된 패턴 (콘솔용) ── -->
+    <!-- %highlight: 레벨별 색상(ERROR:빨강 등), %cyan: 하늘색 -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %boldWhite([%thread]) %highlight(%-5level) %cyan(%logger{36}) - %msg%n"/>
 
     <!-- ── Console Appender ── -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- Windows 환경 등에서 ANSI 컬러를 지원하기 위한 설정 -->
+        <withJansi>true</withJansi>
         <encoder>
-            <pattern>${LOG_PATTERN}</pattern>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
@@ -22,7 +30,7 @@
             <totalSizeCap>2GB</totalSizeCap>
         </rollingPolicy>
         <encoder>
-            <pattern>${LOG_PATTERN}</pattern>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
@@ -35,9 +43,7 @@
     <logger name="org.springframework.web" level="WARN"/>
     <logger name="org.springframework.orm.jpa" level="WARN"/>
 
-    <!-- ══════════════════════════════════════════
-         dev 프로파일: 콘솔 전용, 앱 DEBUG
-         ══════════════════════════════════════════ -->
+    <!-- dev 프로파일 -->
     <springProfile name="dev">
         <logger name="com.aidea.aidea" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE"/>
@@ -50,9 +56,7 @@
         </root>
     </springProfile>
 
-    <!-- ══════════════════════════════════════════
-         prod 프로파일: 콘솔 + 파일, 앱 INFO
-         ══════════════════════════════════════════ -->
+    <!-- prod 프로파일 -->
     <springProfile name="prod">
         <logger name="com.aidea.aidea" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE"/>
@@ -68,9 +72,7 @@
         </root>
     </springProfile>
 
-    <!-- ══════════════════════════════════════════
-         프로파일 없음(기본): 콘솔 전용, 앱 DEBUG
-         ══════════════════════════════════════════ -->
+    <!-- 프로파일 없음(기본) -->
     <springProfile name="!dev &amp; !prod">
         <logger name="com.aidea.aidea" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE"/>
