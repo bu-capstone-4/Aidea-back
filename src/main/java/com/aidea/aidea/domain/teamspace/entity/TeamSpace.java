@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.documents.entity.Document;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,10 @@ public class TeamSpace {
     @Id
     @Column(name = "teamspace_id", nullable = false, length = 100)
     private String teamspaceId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User owner;
 
     @Column(name = "name", nullable = false, length = 50)
     private String name;
