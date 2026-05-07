@@ -11,7 +11,7 @@ import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
-import com.aidea.aidea.domain.teamspace.repository.TeamspaceRepository;
+import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -37,7 +37,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final DocumentUpdateRepository documentUpdateRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
-    private final TeamspaceRepository teamspaceRepository;
+    private final TeamSpaceRepository teamspaceRepository;
     private final UserRepository userRepository;
 
     // ───── REST API 메서드 ─────
@@ -72,7 +72,7 @@ public class DocumentService {
 
     public DocumentDetail getDocument(String docId, String requestUserId) {
         Document doc = findDocument(docId);
-        requireMembership(doc.getTeamspace().getId(), parseUserId(requestUserId));
+        requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
         log.debug("[DOC] getDocument userId={} docId={}", requestUserId, docId);
         return DocumentDetail.from(doc);
     }
@@ -81,7 +81,7 @@ public class DocumentService {
     public DocumentUpdateResponse updateTitle(String docId, DocumentUpdateRequest req, String requestUserId) {
         Long userId = parseUserId(requestUserId);
         Document doc = findDocument(docId);
-        requireRole(doc.getTeamspace().getId(), userId, MemberRole.MEMBER, MemberRole.OWNER);
+        requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.MEMBER, MemberRole.OWNER);
 
         User user = userRepository.findById(userId).orElseThrow();
         doc.setTitle(req.getTitle());
@@ -96,7 +96,7 @@ public class DocumentService {
     public void deleteDocument(String docId, String requestUserId) {
         Long userId = parseUserId(requestUserId);
         Document doc = findDocument(docId);
-        requireRole(doc.getTeamspace().getId(), userId, MemberRole.OWNER);
+        requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.OWNER);
 
         if (doc.getType() == DocumentType.IDEA) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
@@ -132,7 +132,7 @@ public class DocumentService {
 
     public byte[] exportDocument(String docId, String format, String requestUserId) {
         Document doc = findDocument(docId);
-        requireMembership(doc.getTeamspace().getId(), parseUserId(requestUserId));
+        requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
 
         log.info("[DOC] export userId={} docId={} format={}", requestUserId, docId, format);
         if ("md".equalsIgnoreCase(format)) return convertToMarkdown(doc);

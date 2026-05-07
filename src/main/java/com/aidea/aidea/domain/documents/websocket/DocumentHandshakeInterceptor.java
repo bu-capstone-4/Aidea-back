@@ -59,7 +59,7 @@ public class DocumentHandshakeInterceptor implements HandshakeInterceptor {
         }
 
         Optional<TeamspaceMember> member = teamspaceMemberRepository
-                .findByTeamspaceIdAndUserId(doc.getTeamspace().getId(), userId);
+                .findByTeamspaceIdAndUserId(doc.getTeamspace().getTeamspaceId(), userId);
 
         if (member.isEmpty()) {
             log.warn("[WS] handshake rejected userId={} docId={} reason=NOT_TEAMSPACE_MEMBER", userId, docId);

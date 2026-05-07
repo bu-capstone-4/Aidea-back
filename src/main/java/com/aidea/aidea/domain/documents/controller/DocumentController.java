@@ -36,8 +36,7 @@ public class DocumentController {
     public GlobalResponse<DocumentCreateResponse> createDocument(
             @Valid @RequestBody DocumentCreateRequest req,
             @AuthenticationPrincipal String userId) {
-        return GlobalResponse.ok(documentService.createDocument(req.getTeamspaceId(), req, userId),
-                "문서가 생성되었습니다.");
+        return GlobalResponse.ok("문서가 생성되었습니다.", documentService.createDocument(req.getTeamspaceId(), req, userId));
     }
 
     // 문서 상세 조회 — VIEWER 이상

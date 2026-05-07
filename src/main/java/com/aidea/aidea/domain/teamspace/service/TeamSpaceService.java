@@ -1,6 +1,7 @@
 package com.aidea.aidea.domain.teamspace.service;
 
 import com.aidea.aidea.domain.documents.entity.Document;
+import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpaceStatus;
@@ -9,7 +10,6 @@ import com.aidea.aidea.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class TeamSpaceService {
 
     private final TeamSpaceRepository teamSpaceRepository;
+    private final DocumentRepository documentRepository;
 
     public TeamSpaceCreateResponse create(TeamSpaceCreateRequest request) {
 
@@ -32,22 +33,14 @@ public class TeamSpaceService {
                 .status(TeamSpaceStatus.CREATING)
                 .build();
 
+        TeamSpace saved = teamSpaceRepository.save(teamSpace);
+
         if (request.getDocumentTypes() != null) {
             List<Document> documents = request.getDocumentTypes().stream()
-                    .map(type -> Document.builder()
-                            .id(UUID.randomUUID().toString())
-                            .teamspaceId(teamSpace.getTeamspaceId())
-                            .type(type)
-                            .title(type.name())
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build())
+                    .map(type -> Document.create(UUID.randomUUID().toString(), saved, type, type.name()))
                     .collect(Collectors.toList());
-
-            teamSpace.getDocuments().addAll(documents);
+            documentRepository.saveAll(documents);
         }
-
-        TeamSpace saved = teamSpaceRepository.save(teamSpace);
 
         return TeamSpaceCreateResponse.builder()
                 .teamspaceId(saved.getTeamspaceId())
@@ -130,7 +123,7 @@ public class TeamSpaceService {
                 .type(d.getType() != null ? d.getType().name() : null)
                 .title(d.getTitle())
                 .updatedAt(d.getUpdatedAt())
-                .updatedBy(d.getUpdatedBy())
+                .updatedBy(d.getUpdatedBy() != null ? d.getUpdatedBy().getId().toString() : null)
                 .build();
     }
 }

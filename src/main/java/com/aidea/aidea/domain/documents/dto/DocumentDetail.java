@@ -22,7 +22,7 @@ public class DocumentDetail {
     public static DocumentDetail from(Document document) {
         return new DocumentDetail(
                 document.getId(),
-                document.getTeamspace().getId(),
+                document.getTeamspace().getTeamspaceId(),
                 document.getType(),
                 document.getTitle(),
                 document.getCreatedAt(),

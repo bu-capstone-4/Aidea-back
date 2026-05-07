@@ -1,7 +1,7 @@
 package com.aidea.aidea.domain.documents.entity;
 
 import com.aidea.aidea.domain.auth.entity.User;
-import com.aidea.aidea.domain.teamspace.entity.Teamspace;
+import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,7 +22,7 @@ public class Document {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teamspace_id", nullable = false)
-    private Teamspace teamspace;
+    private TeamSpace teamspace;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -49,7 +49,7 @@ public class Document {
     @JoinColumn(name = "updated_by")
     private User updatedBy;
 
-    public static Document create(String id, Teamspace teamspace, DocumentType type, String title) {
+    public static Document create(String id, TeamSpace teamspace, DocumentType type, String title) {
         Document doc = new Document();
         doc.id = id;
         doc.teamspace = teamspace;
