@@ -1,0 +1,259 @@
+openapi: 3.0.3
+info:
+  title: Aidea API
+  version: 1.0.0
+  description: |
+    Aidea - Teamspace API
+
+servers:
+  - url: http://localhost:8080
+  - url: https://api.aidea.com
+
+tags:
+  - name: Teamspace
+    description: 팀스페이스 생성, 조회, 관리
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+
+  schemas:
+
+    # =========================
+    # 공통 응답
+    # =========================
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        data:
+          type: object
+          nullable: true
+
+    # =========================
+    # Enum
+    # =========================
+    DocumentType:
+      type: string
+      enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD]
+
+    TeamSpaceStatus:
+      type: string
+      enum: [CREATING, CREATED]
+
+    # =========================
+    # Request DTO
+    # =========================
+    TeamSpaceCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        idea:
+          type: string
+        documentTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentType'
+      required:
+        - name
+
+    TeamSpaceUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TeamSpaceStatus'
+
+    # =========================
+    # Response DTO
+    # =========================
+    TeamSpaceCreateResponse:
+      type: object
+      properties:
+        teamspaceId:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TeamSpaceStatus'
+        createdAt:
+          type: string
+          format: date-time
+
+    DocumentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/DocumentType'
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          nullable: true
+
+    TeamSpaceDetailResponse:
+      type: object
+      properties:
+        teamspaceId:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TeamSpaceStatus'
+        createdAt:
+          type: string
+          format: date-time
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentSummary'
+
+    TeamSpaceListItem:
+      type: object
+      properties:
+        teamspaceId:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TeamSpaceStatus'
+        createdAt:
+          type: string
+          format: date-time
+
+    TeamSpaceListResponse:
+      type: object
+      properties:
+        teamspaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamSpaceListItem'
+
+security:
+  - cookieAuth: []
+
+paths:
+
+  /api/teamspaces:
+    post:
+      tags: [Teamspace]
+      summary: 팀스페이스 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamSpaceCreateRequest'
+      responses:
+        '200':
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamSpaceCreateResponse'
+
+    get:
+      tags: [Teamspace]
+      summary: 팀스페이스 목록 조회
+      responses:
+        '200':
+          description: 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamSpaceListResponse'
+
+  /api/teamspaces/{teamspaceId}:
+    get:
+      tags: [Teamspace]
+      summary: 팀스페이스 단건 조회
+      parameters:
+        - name: teamspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamSpaceDetailResponse'
+
+    put:
+      tags: [Teamspace]
+      summary: 팀스페이스 이름 수정
+      parameters:
+        - name: teamspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamSpaceUpdateRequest'
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TeamSpaceCreateResponse'
+
+    delete:
+      tags: [Teamspace]
+      summary: 팀스페이스 삭제
+      parameters:
+        - name: teamspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'

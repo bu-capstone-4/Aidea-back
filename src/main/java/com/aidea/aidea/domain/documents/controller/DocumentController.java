@@ -2,7 +2,8 @@ package com.aidea.aidea.domain.documents.controller;
 
 import com.aidea.aidea.domain.documents.dto.*;
 import com.aidea.aidea.domain.documents.service.DocumentService;
-import com.aidea.aidea.global.dto.ApiResponse;
+import com.aidea.aidea.global.dto.GlobalResponse;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,47 +23,47 @@ public class DocumentController {
     // 팀스페이스 문서 목록 — VIEWER 이상
     // GET /api/documents?teamspaceId=
     @GetMapping
-    public ApiResponse<List<DocumentSummary>> getDocuments(
+    public GlobalResponse<List<DocumentSummary>> getDocuments(
             @RequestParam String teamspaceId,
             @AuthenticationPrincipal String userId) {
-        return ApiResponse.ok(documentService.getDocuments(teamspaceId, userId));
+        return GlobalResponse.ok(documentService.getDocuments(teamspaceId, userId));
     }
 
     // 문서 추가 생성 — MEMBER 이상
     // POST /api/documents  (body에 teamspaceId 포함)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<DocumentCreateResponse> createDocument(
+    public GlobalResponse<DocumentCreateResponse> createDocument(
             @Valid @RequestBody DocumentCreateRequest req,
             @AuthenticationPrincipal String userId) {
-        return ApiResponse.ok(documentService.createDocument(req.getTeamspaceId(), req, userId),
+        return GlobalResponse.ok(documentService.createDocument(req.getTeamspaceId(), req, userId),
                 "문서가 생성되었습니다.");
     }
 
     // 문서 상세 조회 — VIEWER 이상
     @GetMapping("/{documentId}")
-    public ApiResponse<DocumentDetail> getDocument(
+    public GlobalResponse<DocumentDetail> getDocument(
             @PathVariable String documentId,
             @AuthenticationPrincipal String userId) {
-        return ApiResponse.ok(documentService.getDocument(documentId, userId));
+        return GlobalResponse.ok(documentService.getDocument(documentId, userId));
     }
 
     // 문서 제목 수정 — MEMBER 이상
     @PatchMapping("/{documentId}")
-    public ApiResponse<DocumentUpdateResponse> updateTitle(
+    public GlobalResponse<DocumentUpdateResponse> updateTitle(
             @PathVariable String documentId,
             @RequestBody DocumentUpdateRequest req,
             @AuthenticationPrincipal String userId) {
-        return ApiResponse.ok(documentService.updateTitle(documentId, req, userId));
+        return GlobalResponse.ok(documentService.updateTitle(documentId, req, userId));
     }
 
     // 문서 삭제 — OWNER (IDEA 타입 삭제 불가)
     @DeleteMapping("/{documentId}")
-    public ApiResponse<Void> deleteDocument(
+    public GlobalResponse<Void> deleteDocument(
             @PathVariable String documentId,
             @AuthenticationPrincipal String userId) {
         documentService.deleteDocument(documentId, userId);
-        return ApiResponse.ok("문서가 삭제되었습니다.");
+        return GlobalResponse.ok("문서가 삭제되었습니다.");
     }
 
     // 파일 내보내기 — VIEWER 이상
