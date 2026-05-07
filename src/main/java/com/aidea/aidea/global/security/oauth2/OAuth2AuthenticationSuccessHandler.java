@@ -41,8 +41,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             String provider = oauthToken.getAuthorizedClientRegistrationId();
 
             Object rawId = oAuth2User.getAttribute("id");
-            log.debug("[OAuth2Success] provider={}, rawId={}, rawIdType={}",
-                    provider, rawId, rawId != null ? rawId.getClass().getName() : "null");
+            log.debug("[AUTH] oauth2 callback provider={} rawIdType={}",
+                    provider, rawId != null ? rawId.getClass().getName() : "null");
 
             if (rawId == null) {
                 throw new IllegalStateException("GitHub OAuth2 응답에 id 속성이 없습니다.");
@@ -53,8 +53,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                     .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
             Long userId = user.getId();
-            log.debug("[OAuth2Success] userId={}, provider={}, providerId={}", userId, provider, providerId);
-
             if (userId == null) {
                 throw new IllegalStateException("DB에서 조회한 User의 id가 null입니다. providerId=" + providerId);
             }
@@ -68,10 +66,10 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             response.addCookie(cookieUtils.createAccessTokenCookie(accessToken));
             response.addCookie(cookieUtils.createRefreshTokenCookie(refreshToken));
 
+            log.info("[AUTH] oauth2 login userId={} provider={}", userId, provider);
             getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/");
         } catch (Exception e) {
-            e.printStackTrace();
-            log.error("[OAuth2Success] 인증 성공 처리 중 예외 발생: {}", e.getMessage(), e);
+            log.error("[AUTH] oauth2 login failed reason={}", e.getMessage(), e);
             getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/login?error=server");
         }
     }

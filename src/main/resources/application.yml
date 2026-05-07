@@ -13,12 +13,12 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO:create}
+      ddl-auto: ${DDL_AUTO:update}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.MySQLDialect
-    show-sql: ${SHOW_SQL:true}
+    show-sql: false
     open-in-view: false
 
   security:
@@ -62,7 +62,4 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
-logging:
-  level:
-    com.aidea.aidea: DEBUG
-    org.springframework.security: DEBUG
+# 로그 레벨은 logback-spring.xml 의 springProfile 블록에서 관리합니다.

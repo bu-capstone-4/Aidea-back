@@ -22,13 +22,16 @@ public enum ErrorCode {
     TEAMSPACE_NOT_FOUND(HttpStatus.NOT_FOUND, "TEAMSPACE_NOT_FOUND", "팀스페이스를 찾을 수 없습니다."),
     ALREADY_MEMBER(HttpStatus.CONFLICT, "ALREADY_MEMBER", "이미 팀스페이스에 가입된 회원입니다."),
     NOT_TEAMSPACE_OWNER(HttpStatus.FORBIDDEN, "NOT_TEAMSPACE_OWNER", "팀스페이스 소유자만 가능합니다."),
+    NOT_TEAMSPACE_MEMBER(HttpStatus.FORBIDDEN, "NOT_TEAMSPACE_MEMBER", "팀스페이스 소속이 아닙니다."),
+    INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, "INSUFFICIENT_PERMISSION", "권한이 없습니다."),
 
     // ===== 문서 (Document) =====
     DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "문서를 찾을 수 없습니다."),
 
     // ===== 초대 (Invitation) =====
     INVITATION_NOT_FOUND(HttpStatus.NOT_FOUND, "INVITATION_NOT_FOUND", "초대를 찾을 수 없습니다."),
-    INVITATION_EXPIRED(HttpStatus.BAD_REQUEST, "INVITATION_EXPIRED", "만료된 초대입니다.");
+    INVITATION_EXPIRED(HttpStatus.BAD_REQUEST, "INVITATION_EXPIRED", "만료된 초대입니다."),
+    ALREADY_INVITED(HttpStatus.CONFLICT, "ALREADY_INVITED", "이미 초대된 이메일입니다.");
 
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)
     private final String code;            // 우리가 정한 에러 코드 문자열

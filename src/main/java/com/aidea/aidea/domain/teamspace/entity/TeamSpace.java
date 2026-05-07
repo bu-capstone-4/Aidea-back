@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.documents.entity.Document;
 
 import java.time.LocalDateTime;
@@ -23,6 +24,10 @@ public class TeamSpace {
     @Column(name = "teamspace_id", nullable = false, length = 100)
     private String teamspaceId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User owner;
+
     @Column(name = "name", nullable = false, length = 50)
     private String name;
 
@@ -30,10 +35,7 @@ public class TeamSpace {
     @Column(name = "status", nullable = false)
     private TeamSpaceStatus status;
 
-    // Document가 teamspaceId (String)으로만 관리되므로 양방향 매핑 제거
-    // 대신 읽기 전용 조회용 매핑으로 변경
-    @OneToMany
-    @JoinColumn(name = "teamspace_id", referencedColumnName = "teamspace_id", insertable = false, updatable = false)
+    @OneToMany(mappedBy = "teamspace")
     @Builder.Default
     private List<Document> documents = new ArrayList<>();
 
