@@ -61,4 +61,11 @@ public class TestGlobalResponseDTO<T> {
             .data(null)
             .build();
 }
+public static TestGlobalResponseDTO<Void> ok() {
+        return TestGlobalResponseDTO.<Void>builder()
+                .success(true)
+                .code("SUCCESS")
+                .message("요청이 성공적으로 처리되었습니다.")
+                .build();
+    }
 }
