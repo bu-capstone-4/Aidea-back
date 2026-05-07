@@ -2,7 +2,8 @@ package com.aidea.aidea.domain.teamspace.controller;
 
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.service.TeamSpaceService;
-import com.aidea.aidea.global.dto.ApiResponse;
+import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,33 +16,33 @@ public class TeamSpaceController {
 
     // 팀스페이스 생성
     @PostMapping
-    public ApiResponse<TeamSpaceCreateResponse> create(@RequestBody TeamSpaceCreateRequest request) {
-        return ApiResponse.ok(teamSpaceService.create(request));
+    public TestGlobalResponseDTO<TeamSpaceCreateResponse> create(@RequestBody TeamSpaceCreateRequest request) {
+        return TestGlobalResponseDTO.ok(teamSpaceService.create(request));
     }
 
     // 팀스페이스 단건 조회
     @GetMapping("/{teamspaceId}")
-    public ApiResponse<TeamSpaceDetailResponse> get(@PathVariable String teamspaceId) {
-        return ApiResponse.ok(teamSpaceService.get(teamspaceId));
+    public TestGlobalResponseDTO<TeamSpaceDetailResponse> get(@PathVariable String teamspaceId) {
+        return TestGlobalResponseDTO.ok(teamSpaceService.get(teamspaceId));
     }
 
     // 팀스페이스 목록 조회
     @GetMapping
-    public ApiResponse<TeamSpaceListResponse> getList() {
-        return ApiResponse.ok(teamSpaceService.getList());
+    public TestGlobalResponseDTO<TeamSpaceListResponse> getList() {
+        return TestGlobalResponseDTO.ok(teamSpaceService.getList());
     }
 
     // 팀스페이스 수정(이름)
     @PutMapping("/{teamspaceId}")
-    public ApiResponse<TeamSpaceCreateResponse> update(@PathVariable String teamspaceId,
+    public TestGlobalResponseDTO<TeamSpaceCreateResponse> update(@PathVariable String teamspaceId,
                                                        @RequestBody TeamSpaceUpdateRequest request) {
-        return ApiResponse.ok(teamSpaceService.update(teamspaceId, request));
+        return TestGlobalResponseDTO.ok(teamSpaceService.update(teamspaceId, request));
     }
 
     // 팀스페이스 삭제
     @DeleteMapping("/{teamspaceId}")
-    public ApiResponse<Void> delete(@PathVariable String teamspaceId) {
+    public TestGlobalResponseDTO<Void> delete(@PathVariable String teamspaceId) {
         teamSpaceService.delete(teamspaceId);
-        return ApiResponse.ok();
+        return TestGlobalResponseDTO.ok();
     }
 }
