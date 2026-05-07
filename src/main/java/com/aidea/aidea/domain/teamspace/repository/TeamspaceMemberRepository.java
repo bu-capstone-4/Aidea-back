@@ -10,4 +10,5 @@ public interface TeamspaceMemberRepository extends JpaRepository<TeamspaceMember
     Optional<TeamspaceMember> findByTeamspaceIdAndUserId(String teamspaceId, Long userId);
     List<TeamspaceMember> findByUserId(Long userId);
     void deleteAllByTeamspaceId(String teamspaceId);
+    List<TeamspaceMember> findByTeamspaceId(String teamspaceId);
 }
