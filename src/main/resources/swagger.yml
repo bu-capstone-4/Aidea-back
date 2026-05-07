@@ -150,6 +150,7 @@ components:
           items:
             type: string
             format: email
+          maxItems: 8
           example: ["member1@company.com", "member2@company.com"]
 
     AcceptInvitationRequest:
@@ -777,6 +778,77 @@ paths:
                     message: "이미 팀스페이스의 멤버입니다."
         '401':
           description: 비로그인 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/teamspaces/{teamspaceId}/invitations:
+    post:
+      tags: [Member]
+      summary: 팀원 일괄 초대 (팀스페이스 생성 후)
+      description: |
+        팀스페이스 생성 후 최대 8명의 팀원을 이메일로 초대합니다.
+        각 이메일로 초대 링크가 발송되며, 이미 멤버인 경우 해당 이메일은 건너뜁니다.
+      parameters:
+        - name: teamspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+      responses:
+        '200':
+          description: 초대 발송 완료
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            email:
+                              type: string
+                              format: email
+                            status:
+                              type: string
+                              enum: [SENT, ALREADY_MEMBER]
+              example:
+                success: true
+                message: "초대가 발송되었습니다."
+                data:
+                  - email: "member1@company.com"
+                    status: "SENT"
+                  - email: "member2@company.com"
+                    status: "ALREADY_MEMBER"
+        '400':
+          description: 잘못된 요청 (이메일 8개 초과 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: "INVITATION_001"
+                message: "한 번에 최대 8명까지 초대할 수 있습니다."
+        '403':
+          description: 권한 없음 (OWNER만 초대 가능)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 팀스페이스 없음
           content:
             application/json:
               schema:
