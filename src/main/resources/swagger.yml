@@ -33,10 +33,8 @@ tags:
     description: 인증 (소셜 로그인, 토큰 관리)
   - name: Teamspace
     description: 팀스페이스 생성, 조회, 관리
-  - name: Invitation
-    description: 팀원 초대 및 수락
   - name: Member
-    description: 멤버 조회, 추방, 초대 취소
+    description: 멤버 조회, 초대, 추방, 초대 수락/취소
   - name: Document
     description: 문서 CRUD 및 내보내기
   - name: Feedback
@@ -237,6 +235,13 @@ components:
         title:
           type: string
           description: "문서 제목 (미입력 시 type 기반 기본값)"
+
+    TeamspaceUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 팀스페이스 이름
 
     DocumentUpdateRequest:
       type: object
@@ -523,18 +528,10 @@ paths:
                 code: "TEAMSPACE_001"
                 message: "팀스페이스를 찾을 수 없습니다."
 
-  # ===== Invitation =====
-  /api/teamspaces/{teamspaceId}/invitations:
-    post:
-      tags: [Invitation]
-      summary: 팀원 초대 (이메일 발송)
-      description: |
-        팀스페이스에 팀원을 초대합니다. 이메일로 초대 링크가 발송됩니다.
-
-        - 최대 8개 이메일 입력 가능
-        - 이메일 형식 유효성 검사 수행
-        - 빈 배열 전송 시 초대 없이 건너뛰기 허용
-        - 초대 링크: `/invite?token={inviteToken}`
+    put:
+      tags: [Teamspace]
+      summary: 팀스페이스 이름 수정
+      description: 팀스페이스 이름을 수정합니다. OWNER 권한이 필요합니다.
       parameters:
         - name: teamspaceId
           in: path
@@ -546,66 +543,69 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InviteRequest'
+              $ref: '#/components/schemas/TeamspaceUpdateRequest'
       responses:
         '200':
-          description: 초대 발송 완료
+          description: 수정 성공
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          teamspaceId:
+                            type: string
+                          name:
+                            type: string
+                          status:
+                            type: string
+                            enum: [CREATING, CREATED]
+                          createdAt:
+                            type: string
+                            format: date-time
               example:
                 success: true
-                message: "초대가 발송되었습니다."
-                data:
-                  invitedCount: 2
-        '400':
-          description: 잘못된 이메일 형식
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/invitations/accept:
-    post:
-      tags: [Invitation]
-      summary: 초대 수락
-      description: |
-        초대 토큰을 사용하여 팀스페이스 초대를 수락합니다.
-
-        **흐름:**
-        1. 초대받은 사람이 이메일의 초대 링크 클릭
-        2. 로그인 완료 후 이 API 호출
-        3. 서버가 해당 팀스페이스에 멤버로 등록
-        4. 완료 응답 → `/teamspace/{teamspaceId}`로 라우트 이동
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AcceptInvitationRequest'
-      responses:
-        '200':
-          description: 초대 수락 성공
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-              example:
-                success: true
-                message: "팀스페이스에 참여하였습니다."
+                message: "팀스페이스 이름이 수정되었습니다."
                 data:
                   teamspaceId: "ts_abc123"
-        '400':
-          description: 유효하지 않은 초대 토큰
+                  name: "수정된 팀스페이스 이름"
+        '404':
+          description: 팀스페이스 없음
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Teamspace]
+      summary: 팀스페이스 삭제
+      description: 팀스페이스를 삭제합니다. OWNER 권한이 필요합니다.
+      parameters:
+        - name: teamspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
               example:
-                success: false
-                code: "INVITATION_001"
-                message: "유효하지 않거나 만료된 초대 토큰입니다."
+                success: true
+                message: "팀스페이스가 삭제되었습니다."
+        '404':
+          description: 팀스페이스 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # ===== Member =====
   /api/teamspaces/{teamspaceId}/members:
@@ -698,9 +698,93 @@ paths:
                 success: true
                 message: "멤버가 추방되었습니다."
 
+  /api/invitations/accept:
+    post:
+      tags: [Member]
+      summary: 초대 수락
+      description: |
+        초대 토큰을 사용하여 팀스페이스 초대를 수락합니다.
+
+        **케이스별 흐름:**
+
+        **Case 1 - 이미 로그인된 유저:**
+        1. 이메일 링크 클릭 → `{frontend}/invite?token=abc123`
+        2. 프론트: `/api/auth/me` 호출 → 200
+        3. `POST /api/invitations/accept { token }` 호출
+        4. 완료 → `/teamspaces/{teamspaceId}`로 이동
+
+        **Case 2/3 - 미로그인 유저 (신규/기존):**
+        1. 이메일 링크 클릭 → `{frontend}/invite?token=abc123`
+        2. 프론트: `/api/auth/me` 호출 → 401
+        3. 프론트: `pending_invite_token=abc123` 쿠키 저장 후 GitHub OAuth로 이동
+        4. OAuth 완료 → 서버가 `pending_invite_token` 쿠키 감지, 자동 수락 처리
+        5. 완료 → `/teamspaces/{teamspaceId}`로 리다이렉트
+
+        **검증 순서:**
+        1. token으로 Invitation 조회 (없으면 INVITATION_NOT_FOUND)
+        2. status == PENDING 확인 (아니면 INVITATION_NOT_FOUND)
+        3. expiresAt > now() 확인 (만료 시 INVITATION_EXPIRED)
+        4. 이미 멤버인지 확인 (중복 시 ALREADY_MEMBER)
+        5. TeamspaceMember 등록 (role = invitation.role)
+        6. Invitation.status → ACCEPTED
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+      responses:
+        '200':
+          description: 초대 수락 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          teamspaceId:
+                            type: string
+              example:
+                success: true
+                message: "팀스페이스에 참여하였습니다."
+                data:
+                  teamspaceId: "ts_abc123"
+        '400':
+          description: 유효하지 않거나 만료된 초대 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidToken:
+                  value:
+                    success: false
+                    code: "INVITATION_NOT_FOUND"
+                    message: "유효하지 않거나 이미 사용된 초대입니다."
+                expiredToken:
+                  value:
+                    success: false
+                    code: "INVITATION_EXPIRED"
+                    message: "만료된 초대입니다."
+                alreadyMember:
+                  value:
+                    success: false
+                    code: "ALREADY_MEMBER"
+                    message: "이미 팀스페이스의 멤버입니다."
+        '401':
+          description: 비로그인 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/teamspaces/{teamspaceId}/invitations/{invitationId}:
     delete:
-      tags: [Invitation]
+      tags: [Member]
       summary: 초대 취소
       description: 대기 중인 초대를 취소합니다. OWNER 권한이 필요합니다.
       parameters:
