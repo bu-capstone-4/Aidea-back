@@ -24,7 +24,7 @@ import com.aidea.aidea.domain.documents.dto.DocumentSummary;
 import com.aidea.aidea.domain.documents.dto.DocumentUpdateRequest;
 import com.aidea.aidea.domain.documents.dto.DocumentUpdateResponse;
 import com.aidea.aidea.domain.documents.service.DocumentService;
-import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
+import com.aidea.aidea.global.dto.GlobalResponse;
 
 
 
@@ -43,37 +43,37 @@ public class DocumentController {
 
     // 유저의 팀 스페이스 내 문서 목록 조회
     @GetMapping
-    public TestGlobalResponseDTO<List<DocumentSummary>> getDocuments(
+    public GlobalResponse<List<DocumentSummary>> getDocuments(
             @RequestParam("teamspaceId") String teamspaceId) {
 
         List<DocumentSummary> result = documentService.getDocuments(teamspaceId);
 
 
-        return TestGlobalResponseDTO.ok(result);
+        return GlobalResponse.ok(result);
     }
     
     // 워크스페이스id, type, title 작성 후 문서 생성
     @PostMapping
-    public TestGlobalResponseDTO<DocumentCreateResponse> createDocument(
+    public GlobalResponse<DocumentCreateResponse> createDocument(
             @RequestBody DocumentCreateRequest request) {
 
         DocumentCreateResponse response = documentService.createDocument(request);
 
-        return TestGlobalResponseDTO.ok(response);
+        return GlobalResponse.ok(response);
     }
 
     // 문서 id로(UUID, String) 상세 조회
     @GetMapping("/{documentId}")
-    public TestGlobalResponseDTO<DocumentDetail> getDocumentDetail(
+    public GlobalResponse<DocumentDetail> getDocumentDetail(
             @PathVariable("documentId") String documentId
     ) {
         DocumentDetail result = documentService.getDocumentDetail(documentId);
-        return TestGlobalResponseDTO.ok(result);
+        return GlobalResponse.ok(result);
     }
 
     // 문서 제목 수정
     @PatchMapping("/{documentId}")
-    public TestGlobalResponseDTO<DocumentUpdateResponse> updateDocumentTitle(
+    public GlobalResponse<DocumentUpdateResponse> updateDocumentTitle(
             @PathVariable("documentId") String documentId,
             @RequestBody DocumentUpdateRequest request
     ) {
@@ -81,18 +81,18 @@ public class DocumentController {
         DocumentUpdateResponse response =
                 documentService.updateTitle(documentId, request);
 
-        return TestGlobalResponseDTO.ok("문서 제목이 수정되었습니다.", response);
+        return GlobalResponse.ok("문서 제목이 수정되었습니다.", response);
     }
 
     // 문서 삭제
     @DeleteMapping("/{documentId}")
-    public TestGlobalResponseDTO<Void> deleteDocument(
+    public GlobalResponse<Void> deleteDocument(
             @PathVariable("documentId") String documentId
     ) {
 
         documentService.deleteDocument(documentId);
 
-        return TestGlobalResponseDTO.ok("문서가 삭제되었습니다.");
+        return GlobalResponse.ok("문서가 삭제되었습니다.");
     }
 
     // 파일 다운로드
