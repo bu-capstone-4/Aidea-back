@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -63,8 +64,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             user.updateRefreshToken(refreshToken);
             userRepository.save(user);
 
-            response.addCookie(cookieUtils.createAccessTokenCookie(accessToken));
-            response.addCookie(cookieUtils.createRefreshTokenCookie(refreshToken));
+            response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createAccessTokenCookie(accessToken).toString());
+            response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createRefreshTokenCookie(refreshToken).toString());
 
             log.info("[AUTH] oauth2 login userId={} provider={}", userId, provider);
             getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/");

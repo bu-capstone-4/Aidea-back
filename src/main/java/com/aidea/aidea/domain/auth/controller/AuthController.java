@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,7 @@ public class AuthController {
         String refreshToken = cookieUtils.extractCookieValue(request, "refresh_token")
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REFRESH_TOKEN));
         String newAccessToken = authService.refreshToken(refreshToken);
-        response.addCookie(cookieUtils.createAccessTokenCookie(newAccessToken));
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createAccessTokenCookie(newAccessToken).toString());
         return ResponseEntity.ok(GlobalResponse.ok("토큰이 갱신되었습니다."));
     }
 
@@ -43,8 +44,8 @@ public class AuthController {
                 .getAuthentication().getPrincipal();
         authService.logout(Long.parseLong(userId));
 
-        response.addCookie(cookieUtils.expireCookie("access_token"));
-        response.addCookie(cookieUtils.expireCookie("refresh_token"));
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("access_token").toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("refresh_token").toString());
         return ResponseEntity.ok(GlobalResponse.ok("로그아웃 성공"));
     }
 
