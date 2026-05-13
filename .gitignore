@@ -51,3 +51,6 @@ app.jar
 ### macOS Patch ###
 # iCloud generated files
 *.icloud
+
+
+.env.example
