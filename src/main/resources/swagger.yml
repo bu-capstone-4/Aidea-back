@@ -32,6 +32,7 @@ tags:
   - name: Auth
     description: 인증 (소셜 로그인, 토큰 관리)
   - name: Teamspace
+
     description: 팀스페이스 생성, 조회, 관리
   - name: Member
     description: 멤버 조회, 초대, 추방, 초대 수락/취소

@@ -1,5 +1,6 @@
 package com.aidea.aidea.domain.documents.websocket;
 
+import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
 import com.aidea.aidea.domain.documents.service.DocumentService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -24,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentWebSocketHandler extends TextWebSocketHandler {
+public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
@@ -133,16 +134,16 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    // Phase 4의 GeminiService가 피드백 이벤트 푸시 시 사용
-    public void pushToDocument(String docId, String jsonEvent) {
+    @Override
+    public void publishToDocument(String documentId, String jsonEvent) {
         TextMessage message = new TextMessage(jsonEvent);
-        Set<WebSocketSession> sessions = docSessions.getOrDefault(docId, Collections.emptySet());
+        Set<WebSocketSession> sessions = docSessions.getOrDefault(documentId, Collections.emptySet());
         for (WebSocketSession s : sessions) {
             if (s.isOpen()) {
                 try {
                     s.sendMessage(message);
                 } catch (IOException e) {
-                    log.warn("[WS] pushToDocument failed sessionId={} docId={}", s.getId(), docId);
+                    log.warn("[WS] publishToDocument failed sessionId={} docId={}", s.getId(), documentId);
                 }
             }
         }

@@ -29,30 +29,36 @@ public class GeminiService {
     private final FeedbackEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
-    @Value("${gemini.api-key}") //application.yml에서 키 값 읽어옴
+    @Value("${gemini.api-key}")
     private String apiKey;
 
-    private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    @Value("${gemini.base-url}")
+    private String geminiBaseUrl;
 
-    //HTTP 클라이언트
+    @Value("${gemini.model}")
+    private String geminiModel;
+
     private final RestClient restClient = RestClient.create();
 
     @Async
     @Transactional
-    public void callGemini(String feedbackId) {  //처음 피드백 요청 받았을 때 호출
+    public void callGemini(String feedbackId) {
+        log.info("[Gemini] callGemini 시작 feedbackId={} thread={}", feedbackId, Thread.currentThread().getName());
+
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new IllegalStateException("feedback not found: " + feedbackId));
+        log.info("[Gemini] feedback 조회 완료 feedbackId={} status={}", feedbackId, feedback.getStatus());
 
         try {
             String prompt = buildInitialPrompt(
                     feedback.getOriginalMarkdown(),
                     feedback.getAdditionalRequest()
             );
+            log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
             GeminiResult result = callGeminiApi(prompt);
+            log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
-            // 두 갈래 처리
             if (result.type() == GeminiResult.Type.QUESTIONS) {
                 applyQuestioningResult(feedback, result.questions());
             } else {
@@ -60,16 +66,19 @@ public class GeminiService {
             }
 
         } catch (Exception e) {
-            log.error("Gemini 호출 실패: feedbackId={}", feedbackId, e);
+            log.error("[Gemini] 호출 실패 feedbackId={}", feedbackId, e);
             applyFailure(feedback);
         }
     }
 
     @Async
     @Transactional
-    public void callGeminiWithAnswers(String feedbackId) {  //사용자가 질문에 답변한 후 호출
+    public void callGeminiWithAnswers(String feedbackId) {
+        log.info("[Gemini] callGeminiWithAnswers 시작 feedbackId={} thread={}", feedbackId, Thread.currentThread().getName());
+
         Feedback feedback = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new IllegalStateException("feedback not found"));
+        log.info("[Gemini] feedback 조회 완료 feedbackId={} status={}", feedbackId, feedback.getStatus());
 
         try {
             String prompt = buildAnswerPrompt(
@@ -78,27 +87,27 @@ public class GeminiService {
                     feedback.getAnswers(),
                     feedback.getAdditionalRequest()
             );
+            log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
             GeminiResult result = callGeminiApi(prompt);
+            log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
-            // 답변 후엔 무조건 FEEDBACK이어야 함 (질문이 또 오면 안 됨)
             if (result.type() != GeminiResult.Type.FEEDBACK) {
-                throw new IllegalStateException("답변 후엔 FEEDBACK 응답이 와야 함");
+                throw new IllegalStateException("답변 후엔 FEEDBACK 응답이 와야 함, 실제=" + result.type());
             }
 
             applyFeedbackResult(feedback, result.revisedMarkdown());
 
         } catch (Exception e) {
-            log.error("Gemini 재호출 실패: feedbackId={}", feedbackId, e);
+            log.error("[Gemini] 재호출 실패 feedbackId={}", feedbackId, e);
             applyFailure(feedback);
         }
     }
 
-    //질문결과처리
     private void applyQuestioningResult(Feedback feedback, List<Question> questions) {
         feedback.setQuestions(questions);
         feedback.setStatus(FeedbackStatus.QUESTIONING);
-        // save() 호출 안 해도 더티 체킹으로 자동 UPDATE — 트랜잭션 끝날 때
+        log.info("[Gemini] QUESTIONING 상태 전환 feedbackId={} questionCount={}", feedback.getId(), questions.size());
 
         eventPublisher.publishToDocument(
                 feedback.getDocument().getId(),
@@ -107,12 +116,13 @@ public class GeminiService {
                         "questions", questions
                 ))
         );
+        log.info("[Gemini] feedback:questioning 이벤트 발행 완료 feedbackId={}", feedback.getId());
     }
 
-    //수정안 결과 처리
     private void applyFeedbackResult(Feedback feedback, String revisedMarkdown) {
         feedback.setRevisedMarkdown(revisedMarkdown);
         feedback.setStatus(FeedbackStatus.DONE);
+        log.info("[Gemini] DONE 상태 전환 feedbackId={} revisedMarkdownLength={}", feedback.getId(), revisedMarkdown.length());
 
         eventPublisher.publishToDocument(
                 feedback.getDocument().getId(),
@@ -121,11 +131,12 @@ public class GeminiService {
                         "revisedMarkdown", revisedMarkdown
                 ))
         );
+        log.info("[Gemini] feedback:ready 이벤트 발행 완료 feedbackId={}", feedback.getId());
     }
 
-    //실패 처리
     private void applyFailure(Feedback feedback) {
         feedback.setStatus(FeedbackStatus.FAILED);
+        log.warn("[Gemini] FAILED 상태 전환 feedbackId={}", feedback.getId());
 
         eventPublisher.publishToDocument(
                 feedback.getDocument().getId(),
@@ -136,9 +147,7 @@ public class GeminiService {
     }
 
 
-    //실제 Gemini API 호출
     private GeminiResult callGeminiApi(String prompt) throws Exception {
-        // 1. Gemini 요청 body 구성
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(
                         Map.of("parts", List.of(Map.of("text", prompt)))
@@ -149,29 +158,46 @@ public class GeminiService {
                 )
         );
 
-        // 2. HTTP POST 호출
+        String url = geminiBaseUrl + "/models/" + geminiModel + ":generateContent";
+        log.info("[Gemini] API 호출 시작 url={}", url);
+
         Map response = restClient.post()
-                .uri(GEMINI_URL + "?key=" + apiKey)
+                .uri(url + "?key=" + apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(requestBody)
                 .retrieve()
                 .body(Map.class);
 
-        // 3. 응답 구조 해체: candidates[0].content.parts[0].text
+        log.info("[Gemini] API 응답 수신 완료");
+
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
         if (candidates == null || candidates.isEmpty()) {
+            log.error("[Gemini] candidates 없음 response={}", response);
             throw new IllegalStateException("Gemini가 빈 응답을 반환");
         }
+        log.debug("[Gemini] candidates 파싱 완료 count={}", candidates.size());
 
         @SuppressWarnings("unchecked")
         Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+        if (content == null) {
+            log.error("[Gemini] content 필드 없음 candidate={}", candidates.get(0));
+            throw new IllegalStateException("Gemini 응답에 content 필드 없음");
+        }
+
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-        String resultJson = (String) parts.get(0).get("text");
+        if (parts == null || parts.isEmpty()) {
+            log.error("[Gemini] parts 필드 없음 content={}", content);
+            throw new IllegalStateException("Gemini 응답에 parts 필드 없음");
+        }
 
-        // 4. 응답 JSON을 GeminiResult로 역직렬화
-        return objectMapper.readValue(resultJson, GeminiResult.class);
+        String resultJson = (String) parts.get(0).get("text");
+        log.debug("[Gemini] resultJson 추출 완료 length={}", resultJson.length());
+
+        GeminiResult result = objectMapper.readValue(resultJson, GeminiResult.class);
+        log.info("[Gemini] 역직렬화 완료 type={}", result.type());
+        return result;
     }
 
     //Gemini가 따라야 할 응답 양식

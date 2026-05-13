@@ -16,7 +16,6 @@ import java.util.List;
 
 @Entity
 @Getter
-@Setter
 @Table(name = "feedbacks")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Feedback {
@@ -28,6 +27,7 @@ public class Feedback {
     @JoinColumn(name = "document_id", nullable = false)
     private Document document;
 
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FeedbackStatus status;
@@ -42,13 +42,16 @@ public class Feedback {
     @Column(name = "original_markdown", columnDefinition = "MEDIUMTEXT", nullable = false)
     private String originalMarkdown;
 
+    @Setter
     @Column(name = "revised_markdown", columnDefinition = "MEDIUMTEXT")
     private String revisedMarkdown;
 
+    @Setter
     @Column(name = "questions", columnDefinition = "JSON")
     @Convert(converter = QuestionsConverter.class)
     private List<Question> questions;
 
+    @Setter
     @Column(name = "answers", columnDefinition = "JSON")
     @Convert(converter = AnswersConverter.class)
     private List<Answer> answers;

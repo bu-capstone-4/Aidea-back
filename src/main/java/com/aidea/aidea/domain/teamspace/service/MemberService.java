@@ -18,7 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,10 +38,14 @@ public class MemberService {
 
         List<MemberInfoResponse> result = new ArrayList<>();
 
-        // 활성 멤버
+        // 활성 멤버 (배치 조회로 N+1 방지)
         List<TeamspaceMember> members = teamspaceMemberRepository.findByTeamspaceId(teamspaceId);
+        Set<Long> userIds = members.stream().map(TeamspaceMember::getUserId).collect(Collectors.toSet());
+        Map<Long, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
         for (TeamspaceMember m : members) {
-            User u = userRepository.findById(m.getUserId()).orElse(null);
+            User u = userMap.get(m.getUserId());
             result.add(MemberInfoResponse.builder()
                     .userId(m.getUserId())
                     .name(u != null ? u.getName() : null)
