@@ -31,7 +31,7 @@ spring:
             scope: read:user, user:email, repo, project
 
 jwt:
-  secret: ${JWT_SECRET:jwtsecret}
+  secret: ${JWT_SECRET:thisIsAVeryLongSecretKeyForJWTThatMustBeAtLeast256BitsLong!}
   access-token-expiry: 1800000
   refresh-token-expiry: 1209600000
 
@@ -66,3 +66,6 @@ logging:
   level:
     com.aidea.aidea: DEBUG
     org.springframework.security: DEBUG
+
+gemini:
+  api-key: AIzaSyDSq1XyBD_V6rnFwdvGGFXDOYErlTskHvU   # 환경변수에서 읽음

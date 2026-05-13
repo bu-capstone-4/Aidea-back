@@ -1,6 +1,6 @@
 package com.aidea.aidea.global.exception;
 
-import com.aidea.aidea.global.dto.ApiResponse;
+import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -9,24 +9,24 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
-    public ResponseEntity<ApiResponse<?>> handleCustomException(CustomException e) {
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
+                .body(TestGlobalResponseDTO.error(errorCode.getCode(), errorCode.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<?>> handleIllegalArgumentException(IllegalArgumentException e) {
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleIllegalArgumentException(IllegalArgumentException e) {
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.error("INVALID_ARGUMENT", e.getMessage()));
+                .body(TestGlobalResponseDTO.error("INVALID_ARGUMENT", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<?>> handleException(Exception e) {
+    public ResponseEntity<TestGlobalResponseDTO<?>> handleException(Exception e) {
         return ResponseEntity
                 .internalServerError()
-                .body(ApiResponse.error("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
+                .body(TestGlobalResponseDTO.error("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
     }
 }

@@ -6,5 +6,6 @@ public enum FeedbackStatus {
     ANSWERING,     // 사용자 답변 받음, Gemini 재호출 중
     DONE,          // 수정안 생성 완료, 사용자 검토 대기
     ACCEPTED,      // 사용자가 수정안 수락 → 프론트가 BlockNote에 적용
-    REJECTED       // 사용자가 원본 유지
+    REJECTED,      // 사용자가 원본 유지
+    FAILED         //Gemini API 호출 실패
 }
