@@ -5,13 +5,13 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "invitation")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-@Builder
 public class Invitation {
 
     @Id
@@ -22,6 +22,8 @@ public class Invitation {
 
     @Column(nullable = false)
     private Long inviterUserId;
+
+    private Long resourceId;
 
     @Column(nullable = false, length = 255)
     private String inviteeEmail;
@@ -34,7 +36,6 @@ public class Invitation {
     private InvitationStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private MemberRole role;
 
     private LocalDateTime expiresAt;
@@ -42,12 +43,24 @@ public class Invitation {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @PrePersist
-    protected void onCreate() {
+
+    @Builder
+    public Invitation(String inviteeEmail, Long inviterId, Long resourceId) {
+        this.id = UUID.randomUUID().toString();
+        this.token = UUID.randomUUID().toString();
+        this.inviteeEmail = inviteeEmail;
+        this.inviterUserId = inviterId;
+        this.resourceId = resourceId;
+        this.status = InvitationStatus.PENDING;
         this.createdAt = LocalDateTime.now();
+        this.expiresAt = LocalDateTime.now().plusHours(48);
     }
 
-    public void cancel() {
-        this.status = InvitationStatus.CANCELLED;
+    public boolean isExpired() {
+        return LocalDateTime.now().isAfter(this.expiresAt);
+    }
+
+    public void accept() {
+        this.status = InvitationStatus.ACCEPTED;
     }
 }
