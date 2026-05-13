@@ -1,32 +1,36 @@
 package com.aidea.aidea.global.exception;
 
-import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.aidea.aidea.global.dto.GlobalResponse;
+
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
-    public ResponseEntity<TestGlobalResponseDTO<?>> handleCustomException(CustomException e) {
+    public ResponseEntity<GlobalResponse<?>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
-                .body(TestGlobalResponseDTO.error(errorCode.getCode(), errorCode.getMessage()));
+                .body(GlobalResponse.error(errorCode.getCode(), errorCode.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<TestGlobalResponseDTO<?>> handleIllegalArgumentException(IllegalArgumentException e) {
+    public ResponseEntity<GlobalResponse<?>> handleIllegalArgumentException(IllegalArgumentException e) {
         return ResponseEntity
                 .badRequest()
-                .body(TestGlobalResponseDTO.error("INVALID_ARGUMENT", e.getMessage()));
+                .body(GlobalResponse.error("INVALID_ARGUMENT", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<TestGlobalResponseDTO<?>> handleException(Exception e) {
+    public ResponseEntity<GlobalResponse<?>> handleException(Exception e) {
+        log.error("Unhandled exception", e);
         return ResponseEntity
                 .internalServerError()
-                .body(TestGlobalResponseDTO.error("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
+                .body(GlobalResponse.error("INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
     }
 }

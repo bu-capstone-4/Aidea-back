@@ -1,65 +1,62 @@
 package com.aidea.aidea.domain.documents.entity;
+
+import com.aidea.aidea.domain.auth.entity.User;
+import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "document")
+@Table(name = "documents")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Document {
 
     @Id
-    @Column(name = "id")
     private String id;
 
-    @Column(name = "teamspace_id", nullable = false)
-    private String teamspaceId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "teamspace_id", nullable = false)
+    private TeamSpace teamspace;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
+    @Column(nullable = false)
     private DocumentType type;
 
-    @Column(name = "title", nullable = false)
+    @Column(nullable = false)
     private String title;
 
-    @Lob
-    @Column(name = "yjs_binary", nullable = true)
-    private byte[] yjsBinary;
+    // Yjs 최종 스냅샷 — 배치 머지 전까지 null
+    @Column(name = "yjs_snapshot", columnDefinition = "LONGBLOB")
+    private byte[] yjsSnapshot;
+
+    // 마지막 머지 시점의 Yjs 논리 시계값
+    @Column(name = "snapshot_clock")
+    private Integer snapshotClock;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt; 
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(name = "updated_by")
-    private String updatedBy;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by")
+    private User updatedBy;
 
-    @PrePersist
-    public void onCreate() {
-
-        // ID 생성
-        if (id == null) {
-            id = java.util.UUID.randomUUID().toString();
-        }
-
-        // 생성 시간
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-
-        // 수정 시간
-        updatedAt = LocalDateTime.now();
+    public static Document create(String id, TeamSpace teamspace, DocumentType type, String title) {
+        Document doc = new Document();
+        doc.id = id;
+        doc.teamspace = teamspace;
+        doc.type = type;
+        doc.title = title;
+        doc.createdAt = LocalDateTime.now();
+        doc.updatedAt = LocalDateTime.now();
+        return doc;
     }
-
-    @PreUpdate
-    public void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-
 }

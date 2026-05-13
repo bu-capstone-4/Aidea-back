@@ -13,12 +13,12 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO:create}
+      ddl-auto: ${DDL_AUTO:update}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.MySQLDialect
-    show-sql: ${SHOW_SQL:true}
+    show-sql: false
     open-in-view: false
 
   security:
@@ -31,7 +31,7 @@ spring:
             scope: read:user, user:email, repo, project
 
 jwt:
-  secret: ${JWT_SECRET:thisIsAVeryLongSecretKeyForJWTThatMustBeAtLeast256BitsLong!}
+  secret: ${JWT_SECRET:jwtsecret}
   access-token-expiry: 1800000
   refresh-token-expiry: 1209600000
 
@@ -62,10 +62,4 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
-logging:
-  level:
-    com.aidea.aidea: DEBUG
-    org.springframework.security: DEBUG
-
-gemini:
-  api-key: AIzaSyDSq1XyBD_V6rnFwdvGGFXDOYErlTskHvU   # 환경변수에서 읽음
+# 로그 레벨은 logback-spring.xml 의 springProfile 블록에서 관리합니다.

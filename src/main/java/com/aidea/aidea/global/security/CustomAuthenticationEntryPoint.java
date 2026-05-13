@@ -1,6 +1,6 @@
 package com.aidea.aidea.global.security;
 
-import com.aidea.aidea.global.dto.TestGlobalResponseDTO;
+import com.aidea.aidea.global.dto.GlobalResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,7 +28,7 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
             response.setContentType("application/json;charset=UTF-8");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             objectMapper.writeValue(response.getWriter(),
-                    TestGlobalResponseDTO.error("UNAUTHORIZED", "인증이 필요합니다."));
+                    GlobalResponse.error("UNAUTHORIZED", "인증이 필요합니다."));
         } else {
             // 비API 경로 (브라우저 직접 접근 등)는 OAuth2 시작점으로 리다이렉트
             response.sendRedirect("/oauth2/authorization/github");

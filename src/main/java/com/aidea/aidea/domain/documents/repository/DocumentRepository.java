@@ -1,15 +1,14 @@
 package com.aidea.aidea.domain.documents.repository;
 
-import java.util.List;
-import java.util.Optional;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import com.aidea.aidea.domain.documents.entity.Document;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-public interface DocumentRepository extends JpaRepository<Document, String>{
+import java.util.List;
 
-     List<Document> findByTeamspaceId(String teamspaceId);
+public interface DocumentRepository extends JpaRepository<Document, String> {
 
-     Optional<Document> findById(String id);
+    @Query("SELECT d FROM Document d WHERE d.teamspace.teamspaceId = :teamspaceId")
+    List<Document> findByTeamspaceId(@Param("teamspaceId") String teamspaceId);
 }
