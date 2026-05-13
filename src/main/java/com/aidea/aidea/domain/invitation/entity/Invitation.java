@@ -45,12 +45,13 @@ public class Invitation {
 
 
     @Builder
-    public Invitation(String inviteeEmail, Long inviterId, Long resourceId) {
+    public Invitation(String teamspaceId, String inviteeEmail, Long inviterId, MemberRole role) {
         this.id = UUID.randomUUID().toString();
         this.token = UUID.randomUUID().toString();
+        this.teamspaceId = teamspaceId;
         this.inviteeEmail = inviteeEmail;
         this.inviterUserId = inviterId;
-        this.resourceId = resourceId;
+        this.role = role;
         this.status = InvitationStatus.PENDING;
         this.createdAt = LocalDateTime.now();
         this.expiresAt = LocalDateTime.now().plusHours(48);

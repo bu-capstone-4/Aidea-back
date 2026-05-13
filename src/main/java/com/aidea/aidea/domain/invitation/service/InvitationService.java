@@ -1,14 +1,19 @@
 package com.aidea.aidea.domain.invitation.service;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
+import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.invitation.entity.Invitation;
 import com.aidea.aidea.domain.invitation.entity.InvitationStatus;
 import com.aidea.aidea.domain.invitation.repository.InvitationRepository;
-
-import jakarta.transaction.Transactional;
+import com.aidea.aidea.domain.teamspace.entity.MemberRole;
+import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
+import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
+import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
+import com.aidea.aidea.global.exception.CustomException;
+import com.aidea.aidea.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -17,42 +22,79 @@ public class InvitationService {
 
     private final InvitationRepository invitationRepository;
     private final MailService mailService;
+    private final TeamSpaceRepository teamSpaceRepository;
+    private final TeamspaceMemberRepository teamspaceMemberRepository;
+    private final UserRepository userRepository;
 
     @Value("${app.base-url}")
     private String baseUrl;
 
-    // 초대 발송
-    public void sendInvitation(Long inviterId, Long resourceId, String inviteeEmail) {
+    public void sendInvitation(Long inviterId, String teamspaceId, String inviteeEmail, MemberRole role) {
+        // 팀스페이스 존재 확인
+        teamSpaceRepository.findById(teamspaceId)
+                .orElseThrow(() -> new CustomException(ErrorCode.TEAMSPACE_NOT_FOUND));
+
+        // 초대자 권한 확인 (VIEWER는 초대 불가)
+        TeamspaceMember inviterMember = teamspaceMemberRepository
+                .findByTeamspaceIdAndUserId(teamspaceId, inviterId)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
+
+        if (inviterMember.getRole() == MemberRole.VIEWER) {
+            throw new CustomException(ErrorCode.INSUFFICIENT_PERMISSION);
+        }
+
+        // 초대 대상이 이미 멤버인지 확인
+        userRepository.findByEmail(inviteeEmail).ifPresent(user ->
+                teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, user.getId())
+                        .ifPresent(m -> { throw new CustomException(ErrorCode.ALREADY_MEMBER); })
+        );
+
         // 중복 초대 방지
         invitationRepository
-            .findByInviteeEmailAndResourceIdAndStatus(inviteeEmail, resourceId, InvitationStatus.PENDING)
-            .ifPresent(i -> { throw new IllegalStateException("이미 초대가 진행 중입니다."); });
+                .findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, inviteeEmail, InvitationStatus.PENDING)
+                .ifPresent(i -> { throw new CustomException(ErrorCode.ALREADY_INVITED); });
 
         Invitation invitation = Invitation.builder()
-            .inviteeEmail(inviteeEmail)
-            .inviterId(inviterId)
-            .resourceId(resourceId)
-            .build();
+                .teamspaceId(teamspaceId)
+                .inviteeEmail(inviteeEmail)
+                .inviterId(inviterId)
+                .role(role)
+                .build();
 
         invitationRepository.save(invitation);
 
-        String inviteLink = baseUrl + "/invitations/accept?token=" + invitation.getToken();
+        String inviteLink = baseUrl + "/api/invitations/accept?token=" + invitation.getToken();
         mailService.sendInvitationMail(inviteeEmail, inviteLink);
     }
 
-    // 초대 수락
     public void acceptInvitation(String token, Long userId) {
         Invitation invitation = invitationRepository.findByToken(token)
-            .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 초대 링크입니다."));
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
 
         if (invitation.isExpired()) {
-            throw new IllegalStateException("만료된 초대 링크입니다.");
-        }
-        if (invitation.getStatus() != InvitationStatus.PENDING) {
-            throw new IllegalStateException("이미 처리된 초대입니다.");
+            throw new CustomException(ErrorCode.INVITATION_EXPIRED);
         }
 
+        if (invitation.getStatus() != InvitationStatus.PENDING) {
+            throw new CustomException(ErrorCode.INVITATION_EXPIRED);
+        }
+
+        // 유저 존재 확인
+        userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 이미 멤버인지 확인
+        teamspaceMemberRepository
+                .findByTeamspaceIdAndUserId(invitation.getTeamspaceId(), userId)
+                .ifPresent(m -> { throw new CustomException(ErrorCode.ALREADY_MEMBER); });
+
         invitation.accept();
-        // TODO: 실제 리소스에 유저 추가하는 로직 (ex. 프로젝트 멤버 추가)
+
+        MemberRole roleToAssign = invitation.getRole() != null ? invitation.getRole() : MemberRole.MEMBER;
+        teamspaceMemberRepository.save(TeamspaceMember.builder()
+                .teamspaceId(invitation.getTeamspaceId())
+                .userId(userId)
+                .role(roleToAssign)
+                .build());
     }
 }
