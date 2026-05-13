@@ -54,3 +54,5 @@ app.jar
 
 
 .env.example
+.claude/settings.local.json
+.env.example

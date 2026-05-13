@@ -30,6 +30,15 @@ spring:
             client-secret: ${GITHUB_CLIENT_SECRET:secret}
             scope: read:user, user:email, repo, project
 
+  # 초대 이메일 관련 설정
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${smtpEmail}
+    password: ${smtpPassword}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 jwt:
   secret: ${JWT_SECRET:jwtsecret}
   access-token-expiry: 1800000
@@ -44,6 +53,11 @@ frontend:
 app:
   cookie:
     secure: ${COOKIE_SECURE:false}
+  
+  # 초대 이메일 관련 설정
+  base-url: http://localhost:8080
+  invitation:
+    expiry-hours: 48
 
 management:
   endpoints:
