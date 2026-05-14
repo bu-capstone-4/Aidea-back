@@ -64,35 +64,6 @@ public class MemberService {
     }
 
     @Transactional
-    public void inviteMember(String teamspaceId, String email, Long userId) {
-        // 호출자 OWNER 확인
-        TeamspaceMember caller = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
-        if (caller.getRole() != MemberRole.OWNER) {
-            throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
-        }
-
-        // 이미 활성 멤버인지 확인
-        User invitee = userRepository.findByEmail(email).orElse(null);
-        if (invitee != null) {
-            if (teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, invitee.getId()).isPresent()) {
-                throw new CustomException(ErrorCode.ALREADY_MEMBER);
-            }
-        }
-
-        // 이미 대기 중인 초대가 있는지 확인
-        invitationRepository.findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING)
-                .ifPresent(inv -> { throw new CustomException(ErrorCode.ALREADY_INVITED); });
-
-        invitationRepository.save(Invitation.builder()
-                .teamspaceId(teamspaceId)
-                .inviteeEmail(email)
-                .inviterId(userId)
-                .role(MemberRole.MEMBER) // 팀 스페이스 권한 멤버로 부여 및 초대
-                .build());
-    }
-
-    @Transactional
     public void removeMember(String teamspaceId, Long memberId, Long userId) {
         // 호출자 OWNER 확인
         TeamspaceMember caller = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)
