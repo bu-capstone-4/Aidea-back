@@ -2,6 +2,9 @@ package com.aidea.aidea.domain.documents.websocket;
 
 import com.aidea.aidea.domain.documents.service.DocumentService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
+import com.aidea.aidea.global.websocket.SocketErrorCode;
+import com.aidea.aidea.global.websocket.SocketErrorSender;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
     private final DocumentUpdateBuffer updateBuffer;
     private final DocumentService documentService;
     private final ObjectMapper objectMapper;
+    private final SocketErrorSender socketErrorSender;
 
     // --- 연결 수립 ---
 
@@ -51,12 +55,39 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        Map<String, Object> payload = objectMapper.readValue(message.getPayload(), new TypeReference<>() {});
-        String type = (String) payload.get("type");
-
-        switch (type) {
-            case "doc:update" -> handleDocUpdate(session, payload);
+        Map<String, Object> payload;
+        try {
+            payload = objectMapper.readValue(message.getPayload(), new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("[WS] invalid JSON sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
         }
+
+        String type = (String) payload.get("type");
+        if (type == null) {
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        try {
+            switch (type) {
+                case "doc:update" -> handleDocUpdate(session, payload);
+                default -> {
+                    log.warn("[WS] unknown message type={} sessionId={}", type, session.getId());
+                    socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[WS] unhandled error type={} sessionId={}", type, session.getId(), e);
+            socketErrorSender.send(session, SocketErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
+        log.error("[WS] transport error sessionId={}", session.getId(), exception);
+        socketErrorSender.send(session, SocketErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     // --- 연결 종료 ---
@@ -107,7 +138,21 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
         String docId = (String) session.getAttributes().get("docId");
         String clientId = (String) session.getAttributes().get("userId");
         String base64Update = (String) payload.get("update");
-        byte[] updateBinary = Base64.getDecoder().decode(base64Update);
+
+        if (base64Update == null || base64Update.isBlank()) {
+            log.warn("[WS] doc:update missing update field sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        byte[] updateBinary;
+        try {
+            updateBinary = Base64.getDecoder().decode(base64Update);
+        } catch (IllegalArgumentException e) {
+            log.warn("[WS] doc:update invalid base64 sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
 
         log.debug("[WS] doc:update docId={} clientId={} bytes={}", docId, clientId, updateBinary.length);
 
