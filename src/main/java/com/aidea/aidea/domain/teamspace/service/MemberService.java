@@ -15,10 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -87,14 +85,10 @@ public class MemberService {
                 .ifPresent(inv -> { throw new CustomException(ErrorCode.ALREADY_INVITED); });
 
         invitationRepository.save(Invitation.builder()
-                .id(UUID.randomUUID().toString())
                 .teamspaceId(teamspaceId)
-                .inviterUserId(userId)
                 .inviteeEmail(email)
-                .token(UUID.randomUUID().toString())
-                .status(InvitationStatus.PENDING)
-                .role(MemberRole.VIEWER)
-                .expiresAt(LocalDateTime.now().plusDays(7))
+                .inviterId(userId)
+                .role(MemberRole.MEMBER) // 팀 스페이스 권한 멤버로 부여 및 초대
                 .build());
     }
 
