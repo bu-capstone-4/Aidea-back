@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+
 @Tag(name = "Auth")
 @RestController
 @RequestMapping("/api/auth")
@@ -38,15 +40,17 @@ public class AuthController {
 
     @Operation(summary = "로그아웃")
     @PostMapping("/logout")
-    public ResponseEntity<GlobalResponse<Void>> logout(HttpServletRequest request,
-                                                    HttpServletResponse response) {
-        String userId = (String) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        authService.logout(Long.parseLong(userId));
+    public void logout(HttpServletRequest request,
+                       HttpServletResponse response) throws IOException {
+        try {
+            String userId = (String) SecurityContextHolder.getContext()
+                    .getAuthentication().getPrincipal();
+            authService.logout(Long.parseLong(userId));
+        } catch (Exception ignored) {}
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("access_token").toString());
         response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("refresh_token").toString());
-        return ResponseEntity.ok(GlobalResponse.ok("로그아웃 성공"));
+        response.sendRedirect("https://github.com/logout");
     }
 
     @Operation(summary = "내 정보 조회")

@@ -100,6 +100,6 @@ public class MemberService {
             throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
         }
 
-        invitation.isExpired();
+        invitationRepository.delete(invitation);
     }
 }
