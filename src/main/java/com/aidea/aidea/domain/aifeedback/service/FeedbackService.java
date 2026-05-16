@@ -11,7 +11,10 @@ import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
+import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
+import com.aidea.aidea.global.util.YjsTextExtractor;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
@@ -21,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +40,7 @@ public class FeedbackService {
 
     private final FeedbackRepository feedbackRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentUpdateRepository documentUpdateRepository;
     private final UserRepository userRepository;
     private final GeminiService geminiService;
     private final FeedbackEventPublisher eventPublisher;
@@ -63,17 +69,34 @@ public class FeedbackService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        // Yjs 바이너리 → 텍스트 디코딩
+        byte[] snapshot = document.getYjsSnapshot();
+        List<byte[]> updates = documentUpdateRepository.findByDocumentIdOrderByIdAsc(docId)
+                .stream().map(DocumentUpdate::getUpdateBinary).toList();
+        String originalMarkdown = YjsTextExtractor.extractText(snapshot, updates);
+        if (originalMarkdown.isBlank()) {
+            originalMarkdown = "# " + document.getTitle();
+        }
+        log.debug("[FEEDBACK] extractedText docId={} length={}", docId, originalMarkdown.length());
+
         Feedback feedback = Feedback.create(
                 UUID.randomUUID().toString(),
                 document,
                 user,
-                request.originalMarkdown(),
+                originalMarkdown,
                 request.additionalRequest()
         );
         feedbackRepository.save(feedback);
 
         publishStartedEvent(feedback);
-        geminiService.callGemini(feedback.getId());
+
+        String feedbackId = feedback.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                geminiService.callGemini(feedbackId);
+            }
+        });
 
         return new FeedbackIdResponse(feedback.getId(), feedback.getStatus());
     }
@@ -96,7 +119,13 @@ public class FeedbackService {
         feedback.setAnswers(answers);
         feedback.setStatus(FeedbackStatus.ANSWERING);
 
-        geminiService.callGeminiWithAnswers(feedback.getId());
+        String fId = feedback.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                geminiService.callGeminiWithAnswers(fId);
+            }
+        });
 
         return new FeedbackIdResponse(feedback.getId(), feedback.getStatus());
     }
