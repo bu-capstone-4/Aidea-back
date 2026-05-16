@@ -47,12 +47,15 @@
     <springProfile name="dev">
         <logger name="com.aidea.aidea" level="DEBUG" additivity="false">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
         </logger>
         <logger name="org.springframework.security" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
         </logger>
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
         </root>
     </springProfile>
 

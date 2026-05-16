@@ -7,17 +7,22 @@ import com.aidea.aidea.domain.aifeedback.entity.Question;
 import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.dto.GeminiResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 
 @Service
@@ -38,7 +43,13 @@ public class GeminiService {
     @Value("${gemini.model}")
     private String geminiModel;
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = RestClient.builder()
+            .requestFactory(new JdkClientHttpRequestFactory(
+                    HttpClient.newBuilder()
+                            .connectTimeout(Duration.ofSeconds(10))
+                            .build()
+            ))
+            .build();
 
     @Async
     @Transactional
@@ -154,7 +165,9 @@ public class GeminiService {
                 ),
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
-                        "responseSchema", buildResponseSchema()
+                        "responseSchema", buildResponseSchema(),
+                        "thinkingConfig", Map.of("thinkingBudget", 0),
+                        "maxOutputTokens", 8192
                 )
         );
 
@@ -192,7 +205,12 @@ public class GeminiService {
             throw new IllegalStateException("Gemini 응답에 parts 필드 없음");
         }
 
-        String resultJson = (String) parts.get(0).get("text");
+        String resultJson = parts.stream()
+                .filter(p -> !Boolean.TRUE.equals(p.get("thought")))
+                .map(p -> (String) p.get("text"))
+                .filter(t -> t != null && !t.isBlank())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Gemini 응답에 텍스트 파트가 없음"));
         log.debug("[Gemini] resultJson 추출 완료 length={}", resultJson.length());
 
         GeminiResult result = objectMapper.readValue(resultJson, GeminiResult.class);
