@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+
 @Tag(name = "Auth")
 @RestController
 @RequestMapping("/api/auth")
@@ -45,7 +47,7 @@ public class AuthController {
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("access_token").toString());
         response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("refresh_token").toString());
-        return ResponseEntity.ok(GlobalResponse.ok("로그아웃 성공"));
+        response.sendRedirect("https://github.com/logout");
     }
 
     @Operation(summary = "내 정보 조회")

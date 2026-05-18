@@ -3,6 +3,7 @@ package com.aidea.aidea.global.security.oauth2;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.io.ObjectOutputStream;
 import java.util.Base64;
 import java.util.Optional;
 
+@Slf4j
 @Component
 public class HttpCookieOAuth2AuthorizationRequestRepository
         implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
@@ -66,8 +68,9 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         try (ByteArrayInputStream bais = new ByteArrayInputStream(Base64.getUrlDecoder().decode(value));
              ObjectInputStream ois = new ObjectInputStream(bais)) {
             return (OAuth2AuthorizationRequest) ois.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            throw new RuntimeException("OAuth2AuthorizationRequest 역직렬화 실패", e);
+        } catch (Exception e) {
+            log.warn("OAuth2AuthorizationRequest 역직렬화 실패, 무시: {}", e.getMessage());
+            return null;
         }
     }
 

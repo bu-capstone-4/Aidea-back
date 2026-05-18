@@ -31,7 +31,8 @@ public enum ErrorCode {
     // ===== 초대 (Invitation) =====
     INVITATION_NOT_FOUND(HttpStatus.NOT_FOUND, "INVITATION_NOT_FOUND", "초대를 찾을 수 없습니다."),
     INVITATION_EXPIRED(HttpStatus.BAD_REQUEST, "INVITATION_EXPIRED", "만료된 초대입니다."),
-    ALREADY_INVITED(HttpStatus.CONFLICT, "ALREADY_INVITED", "이미 초대된 이메일입니다.");
+    ALREADY_INVITED(HttpStatus.CONFLICT, "ALREADY_INVITED", "이미 초대된 이메일입니다."),
+    INVITATION_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "INVITATION_001", "한 번에 최대 8명까지 초대할 수 있습니다.");
 
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)
     private final String code;            // 우리가 정한 에러 코드 문자열
