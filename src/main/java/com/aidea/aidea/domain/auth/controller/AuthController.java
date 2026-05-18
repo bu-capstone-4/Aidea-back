@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Auth")
@@ -39,9 +39,8 @@ public class AuthController {
     @Operation(summary = "로그아웃")
     @PostMapping("/logout")
     public ResponseEntity<GlobalResponse<Void>> logout(HttpServletRequest request,
-                                                    HttpServletResponse response) {
-        String userId = (String) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
+                                                    HttpServletResponse response,
+                                                    @AuthenticationPrincipal String userId) {
         authService.logout(Long.parseLong(userId));
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("access_token").toString());
@@ -51,9 +50,7 @@ public class AuthController {
 
     @Operation(summary = "내 정보 조회")
     @GetMapping("/me")
-    public ResponseEntity<GlobalResponse<UserResponse>> me() {
-        String userId = (String) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
+    public ResponseEntity<GlobalResponse<UserResponse>> me(@AuthenticationPrincipal String userId) {
         UserResponse user = authService.getCurrentUser(Long.parseLong(userId));
         return ResponseEntity.ok(GlobalResponse.ok(user));
     }
