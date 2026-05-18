@@ -34,6 +34,11 @@ public enum ErrorCode {
     ALREADY_INVITED(HttpStatus.CONFLICT, "ALREADY_INVITED", "이미 초대된 이메일입니다."),
     INVITATION_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "INVITATION_001", "한 번에 최대 8명까지 초대할 수 있습니다.");
 
+    // ===== AI 피드백 (Feedback) =====
+    FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "FEEDBACK_NOT_FOUND", "피드백을 찾을 수 없습니다."),
+    FEEDBACK_IN_PROGRESS(HttpStatus.CONFLICT, "FEEDBACK_IN_PROGRESS", "이미 진행 중인 피드백이 있습니다."),
+    FEEDBACK_INVALID_STATUS(HttpStatus.BAD_REQUEST, "FEEDBACK_INVALID_STATUS", "현재 상태에서는 해당 작업을 수행할 수 없습니다.");
+
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)
     private final String code;            // 우리가 정한 에러 코드 문자열
     private final String message;         // 사용자에게 보여줄 메시지

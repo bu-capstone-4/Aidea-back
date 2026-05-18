@@ -33,10 +33,14 @@ public class MemberService {
 
         List<MemberInfoResponse> result = new ArrayList<>();
 
-        // 활성 멤버
+        // 활성 멤버 (배치 조회로 N+1 방지)
         List<TeamspaceMember> members = teamspaceMemberRepository.findByTeamspaceId(teamspaceId);
+        Set<Long> userIds = members.stream().map(TeamspaceMember::getUserId).collect(Collectors.toSet());
+        Map<Long, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
         for (TeamspaceMember m : members) {
-            User u = userRepository.findById(m.getUserId()).orElse(null);
+            User u = userMap.get(m.getUserId());
             result.add(MemberInfoResponse.builder()
                     .userId(m.getUserId())
                     .name(u != null ? u.getName() : null)

@@ -1,7 +1,14 @@
 package com.aidea.aidea.domain.documents.websocket;
 
+import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
+import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
+import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
+import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
+import com.aidea.aidea.global.websocket.SocketErrorCode;
+import com.aidea.aidea.global.websocket.SocketErrorSender;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,14 +32,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentWebSocketHandler extends TextWebSocketHandler {
+public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
 
+    private static final List<FeedbackStatus> TERMINAL_STATUSES =
+            List.of(FeedbackStatus.ACCEPTED, FeedbackStatus.REJECTED, FeedbackStatus.FAILED);
+
     private final DocumentUpdateBuffer updateBuffer;
     private final DocumentService documentService;
+    private final FeedbackRepository feedbackRepository;
     private final ObjectMapper objectMapper;
+    private final SocketErrorSender socketErrorSender;
 
     // --- 연결 수립 ---
 
@@ -51,12 +64,39 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        Map<String, Object> payload = objectMapper.readValue(message.getPayload(), new TypeReference<>() {});
-        String type = (String) payload.get("type");
-
-        switch (type) {
-            case "doc:update" -> handleDocUpdate(session, payload);
+        Map<String, Object> payload;
+        try {
+            payload = objectMapper.readValue(message.getPayload(), new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("[WS] invalid JSON sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
         }
+
+        String type = (String) payload.get("type");
+        if (type == null) {
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        try {
+            switch (type) {
+                case "doc:update" -> handleDocUpdate(session, payload);
+                default -> {
+                    log.warn("[WS] unknown message type={} sessionId={}", type, session.getId());
+                    socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[WS] unhandled error type={} sessionId={}", type, session.getId(), e);
+            socketErrorSender.send(session, SocketErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
+        log.error("[WS] transport error sessionId={}", session.getId(), exception);
+        socketErrorSender.send(session, SocketErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     // --- 연결 종료 ---
@@ -87,10 +127,24 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
             updates.add(Base64.getEncoder().encodeToString(u));
         }
 
-        log.debug("[WS] sendDocInit sessionId={} docId={} snapshotPresent={} pendingUpdates={}",
-                session.getId(), docId, snapshot != null, dbUpdates.size());
+        ActiveFeedbackInfo activeFeedback = feedbackRepository
+                .findTopByDocumentIdAndStatusNotInOrderByCreatedAtDesc(docId, TERMINAL_STATUSES)
+                .map(fb -> new ActiveFeedbackInfo(
+                        fb.getId(),
+                        fb.getStatus(),
+                        fb.getRevisedMarkdown(),
+                        fb.getStatus() == FeedbackStatus.QUESTIONING ? fb.getQuestions() : null
+                ))
+                .orElse(null);
 
-        Map<String, Object> event = Map.of("type", "doc:init", "updates", updates);
+        log.debug("[WS] sendDocInit sessionId={} docId={} snapshotPresent={} pendingUpdates={} activeFeedbackStatus={}",
+                session.getId(), docId, snapshot != null, dbUpdates.size(),
+                activeFeedback != null ? activeFeedback.status() : "none");
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("type", "doc:init");
+        event.put("updates", updates);
+        event.put("activeFeedback", activeFeedback);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
@@ -107,7 +161,21 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
         String docId = (String) session.getAttributes().get("docId");
         String clientId = (String) session.getAttributes().get("userId");
         String base64Update = (String) payload.get("update");
-        byte[] updateBinary = Base64.getDecoder().decode(base64Update);
+
+        if (base64Update == null || base64Update.isBlank()) {
+            log.warn("[WS] doc:update missing update field sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        byte[] updateBinary;
+        try {
+            updateBinary = Base64.getDecoder().decode(base64Update);
+        } catch (IllegalArgumentException e) {
+            log.warn("[WS] doc:update invalid base64 sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
 
         log.debug("[WS] doc:update docId={} clientId={} bytes={}", docId, clientId, updateBinary.length);
 
@@ -133,16 +201,16 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    // Phase 4의 GeminiService가 피드백 이벤트 푸시 시 사용
-    public void pushToDocument(String docId, String jsonEvent) {
+    @Override
+    public void publishToDocument(String documentId, String jsonEvent) {
         TextMessage message = new TextMessage(jsonEvent);
-        Set<WebSocketSession> sessions = docSessions.getOrDefault(docId, Collections.emptySet());
+        Set<WebSocketSession> sessions = docSessions.getOrDefault(documentId, Collections.emptySet());
         for (WebSocketSession s : sessions) {
             if (s.isOpen()) {
                 try {
                     s.sendMessage(message);
                 } catch (IOException e) {
-                    log.warn("[WS] pushToDocument failed sessionId={} docId={}", s.getId(), docId);
+                    log.warn("[WS] publishToDocument failed sessionId={} docId={}", s.getId(), documentId);
                 }
             }
         }

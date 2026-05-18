@@ -9,11 +9,10 @@ import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
-import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
-import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
 import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
+import com.aidea.aidea.global.util.TeamspaceRoleValidator;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.element.Paragraph;
@@ -24,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,14 +34,14 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final DocumentUpdateRepository documentUpdateRepository;
-    private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final TeamSpaceRepository teamspaceRepository;
     private final UserRepository userRepository;
+    private final TeamspaceRoleValidator roleValidator;
 
     // ───── REST API 메서드 ─────
 
     public List<DocumentSummary> getDocuments(String teamspaceId, String requestUserId) {
-        requireMembership(teamspaceId, parseUserId(requestUserId));
+        roleValidator.requireMembership(teamspaceId, parseUserId(requestUserId));
         log.debug("[DOC] getDocuments userId={} teamspaceId={}", requestUserId, teamspaceId);
         return documentRepository.findByTeamspaceId(teamspaceId).stream()
                 .map(DocumentSummary::from)
@@ -53,7 +51,7 @@ public class DocumentService {
     @Transactional
     public DocumentCreateResponse createDocument(String teamspaceId, DocumentCreateRequest req, String requestUserId) {
         Long userId = parseUserId(requestUserId);
-        requireRole(teamspaceId, userId, MemberRole.MEMBER, MemberRole.OWNER);
+        roleValidator.requireRole(teamspaceId, userId, MemberRole.MEMBER, MemberRole.OWNER);
 
         var teamspace = teamspaceRepository.findById(teamspaceId)
                 .orElseThrow(() -> new CustomException(ErrorCode.TEAMSPACE_NOT_FOUND));
@@ -72,7 +70,7 @@ public class DocumentService {
 
     public DocumentDetail getDocument(String docId, String requestUserId) {
         Document doc = findDocument(docId);
-        requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
+        roleValidator.requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
         log.debug("[DOC] getDocument userId={} docId={}", requestUserId, docId);
         return DocumentDetail.from(doc);
     }
@@ -81,9 +79,10 @@ public class DocumentService {
     public DocumentUpdateResponse updateTitle(String docId, DocumentUpdateRequest req, String requestUserId) {
         Long userId = parseUserId(requestUserId);
         Document doc = findDocument(docId);
-        requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.MEMBER, MemberRole.OWNER);
+        roleValidator.requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.MEMBER, MemberRole.OWNER);
 
-        User user = userRepository.findById(userId).orElseThrow();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         doc.setTitle(req.getTitle());
         doc.setUpdatedAt(LocalDateTime.now());
         doc.setUpdatedBy(user);
@@ -96,7 +95,7 @@ public class DocumentService {
     public void deleteDocument(String docId, String requestUserId) {
         Long userId = parseUserId(requestUserId);
         Document doc = findDocument(docId);
-        requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.OWNER);
+        roleValidator.requireRole(doc.getTeamspace().getTeamspaceId(), userId, MemberRole.OWNER);
 
         if (doc.getType() == DocumentType.IDEA) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
@@ -132,29 +131,12 @@ public class DocumentService {
 
     public byte[] exportDocument(String docId, String format, String requestUserId) {
         Document doc = findDocument(docId);
-        requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
+        roleValidator.requireMembership(doc.getTeamspace().getTeamspaceId(), parseUserId(requestUserId));
 
         log.info("[DOC] export userId={} docId={} format={}", requestUserId, docId, format);
         if ("md".equalsIgnoreCase(format)) return convertToMarkdown(doc);
         if ("pdf".equalsIgnoreCase(format)) return convertToPdf(doc);
-        throw new IllegalArgumentException("지원하지 않는 포맷입니다.");
-    }
-
-    // ───── 권한 검사 헬퍼 ─────
-
-    private void requireMembership(String teamspaceId, Long userId) {
-        teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
-    }
-
-    private void requireRole(String teamspaceId, Long userId, MemberRole... allowedRoles) {
-        TeamspaceMember member = teamspaceMemberRepository
-                .findByTeamspaceIdAndUserId(teamspaceId, userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
-
-        if (Arrays.stream(allowedRoles).noneMatch(r -> r == member.getRole())) {
-            throw new CustomException(ErrorCode.INSUFFICIENT_PERMISSION);
-        }
+        throw new CustomException(ErrorCode.INVALID_INPUT);
     }
 
     private Document findDocument(String docId) {

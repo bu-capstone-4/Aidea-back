@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: aidea
 
@@ -46,6 +48,12 @@ jwt:
 
 server:
   port: 8080
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+  thinking-budget: ${GEMINI_THINKING_BUDGET:0}
 
 frontend:
   url: ${FRONTEND_URL}
