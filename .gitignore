@@ -53,6 +53,5 @@ app.jar
 *.icloud
 
 
-.env.example
 .claude/settings.local.json
-.env.example
+
