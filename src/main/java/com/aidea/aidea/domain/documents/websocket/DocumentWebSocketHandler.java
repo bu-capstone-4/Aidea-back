@@ -1,6 +1,9 @@
 package com.aidea.aidea.domain.documents.websocket;
 
+import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
+import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
+import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
@@ -20,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,8 +37,12 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
 
+    private static final List<FeedbackStatus> TERMINAL_STATUSES =
+            List.of(FeedbackStatus.ACCEPTED, FeedbackStatus.REJECTED, FeedbackStatus.FAILED);
+
     private final DocumentUpdateBuffer updateBuffer;
     private final DocumentService documentService;
+    private final FeedbackRepository feedbackRepository;
     private final ObjectMapper objectMapper;
     private final SocketErrorSender socketErrorSender;
 
@@ -119,10 +127,24 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
             updates.add(Base64.getEncoder().encodeToString(u));
         }
 
-        log.debug("[WS] sendDocInit sessionId={} docId={} snapshotPresent={} pendingUpdates={}",
-                session.getId(), docId, snapshot != null, dbUpdates.size());
+        ActiveFeedbackInfo activeFeedback = feedbackRepository
+                .findTopByDocumentIdAndStatusNotInOrderByCreatedAtDesc(docId, TERMINAL_STATUSES)
+                .map(fb -> new ActiveFeedbackInfo(
+                        fb.getId(),
+                        fb.getStatus(),
+                        fb.getRevisedMarkdown(),
+                        fb.getStatus() == FeedbackStatus.QUESTIONING ? fb.getQuestions() : null
+                ))
+                .orElse(null);
 
-        Map<String, Object> event = Map.of("type", "doc:init", "updates", updates);
+        log.debug("[WS] sendDocInit sessionId={} docId={} snapshotPresent={} pendingUpdates={} activeFeedbackStatus={}",
+                session.getId(), docId, snapshot != null, dbUpdates.size(),
+                activeFeedback != null ? activeFeedback.status() : "none");
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("type", "doc:init");
+        event.put("updates", updates);
+        event.put("activeFeedback", activeFeedback);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
