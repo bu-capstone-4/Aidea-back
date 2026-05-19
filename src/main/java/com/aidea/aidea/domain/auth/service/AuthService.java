@@ -46,6 +46,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         user.updateRefreshToken(null);
+        userRepository.save(user);
         log.info("[AUTH] logout userId={}", userId);
     }
 

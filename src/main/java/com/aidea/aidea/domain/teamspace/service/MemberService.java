@@ -15,13 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -63,46 +58,13 @@ public class MemberService {
                     .userId(null)
                     .name(null)
                     .email(inv.getInviteeEmail())
-                    .role(inv.getRole().name())
+                    .role(inv.getRole() != null ? inv.getRole().name() : MemberRole.MEMBER.name())
                     .status("PENDING")
                     .profileImageUrl(null)
                     .build());
         }
 
         return result;
-    }
-
-    @Transactional
-    public void inviteMember(String teamspaceId, String email, Long userId) {
-        // 호출자 OWNER 확인
-        TeamspaceMember caller = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
-        if (caller.getRole() != MemberRole.OWNER) {
-            throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
-        }
-
-        // 이미 활성 멤버인지 확인
-        User invitee = userRepository.findByEmail(email).orElse(null);
-        if (invitee != null) {
-            if (teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, invitee.getId()).isPresent()) {
-                throw new CustomException(ErrorCode.ALREADY_MEMBER);
-            }
-        }
-
-        // 이미 대기 중인 초대가 있는지 확인
-        invitationRepository.findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING)
-                .ifPresent(inv -> { throw new CustomException(ErrorCode.ALREADY_INVITED); });
-
-        invitationRepository.save(Invitation.builder()
-                .id(UUID.randomUUID().toString())
-                .teamspaceId(teamspaceId)
-                .inviterUserId(userId)
-                .inviteeEmail(email)
-                .token(UUID.randomUUID().toString())
-                .status(InvitationStatus.PENDING)
-                .role(MemberRole.VIEWER)
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build());
     }
 
     @Transactional
@@ -142,6 +104,6 @@ public class MemberService {
             throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
         }
 
-        invitation.cancel();
+        invitationRepository.delete(invitation);
     }
 }

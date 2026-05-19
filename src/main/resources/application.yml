@@ -5,9 +5,9 @@ spring:
     name: aidea
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/aidea_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
-    username: ${DB_USERNAME:aidea}
-    password: ${DB_PASSWORD:aidea}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       initialization-fail-timeout: 60000
@@ -15,7 +15,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO:update}
+      ddl-auto: ${DDL_AUTO}
     properties:
       hibernate:
         format_sql: false
@@ -28,10 +28,19 @@ spring:
       client:
         registration:
           github:
-            client-id: ${GITHUB_CLIENT_ID:clientid}
-            client-secret: ${GITHUB_CLIENT_SECRET:secret}
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
             scope: read:user, user:email, repo, project
 
+  # 초대 이메일 관련 설정
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_EMAIL}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 jwt:
   secret: ${JWT_SECRET}
   access-token-expiry: 1800000
@@ -47,11 +56,16 @@ gemini:
   thinking-budget: ${GEMINI_THINKING_BUDGET:0}
 
 frontend:
-  url: ${FRONTEND_URL:http://localhost:5173}
+  url: ${FRONTEND_URL}
 
 app:
   cookie:
-    secure: ${COOKIE_SECURE:false}
+    secure: ${COOKIE_SECURE}
+  
+  # 초대 이메일 관련 설정
+  base-url: ${APP_BASE_URL}
+  invitation:
+    expiry-hours: ${APP_INVITATION_EXPIRY_HOURS}
 
 management:
   endpoints:

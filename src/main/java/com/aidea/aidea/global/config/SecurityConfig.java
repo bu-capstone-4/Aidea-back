@@ -14,11 +14,14 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.aidea.aidea.global.security.oauth2.CustomAuthorizationRequestResolver;
 
 import java.util.List;
 
@@ -33,6 +36,7 @@ public class SecurityConfig {
     private final OAuth2AuthenticationFailureHandler oAuth2FailureHandler;
     private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    private final ClientRegistrationRepository clientRegistrationRepository;
 
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -49,6 +53,7 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/api/auth/refresh",
+                                "/api/invitations/accept",
                                 "/ws/**",           // WebSocket — HandshakeInterceptor에서 인증 처리
                                 "/favicon.ico",
                                 "/error",
@@ -56,7 +61,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/actuator/health"
+                                "/actuator/health",
+                                "/invitations/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -66,7 +72,9 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(endpoint ->
-                                endpoint.authorizationRequestRepository(cookieAuthorizationRequestRepository))
+                                endpoint
+                                        .authorizationRequestRepository(cookieAuthorizationRequestRepository)
+                                        .authorizationRequestResolver(new CustomAuthorizationRequestResolver(clientRegistrationRepository)))
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)

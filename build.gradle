@@ -19,6 +19,10 @@ repositories {
 
 dependencies {
 
+	// 초대 관련 이메일 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
 	// PDF 변환 라이브러리
 	implementation 'com.itextpdf:itext7-core:7.2.5'
 
