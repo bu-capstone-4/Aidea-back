@@ -4,7 +4,7 @@ import com.aidea.aidea.domain.teamspace.dto.MemberInfoResponse;
 import com.aidea.aidea.domain.teamspace.service.MemberService;
 import com.aidea.aidea.global.dto.GlobalResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,8 +19,7 @@ public class MemberController {
     @GetMapping("/{teamspaceId}/members")
     public GlobalResponse<List<MemberInfoResponse>> getMembers(
             @PathVariable String teamspaceId,
-            Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
-        return GlobalResponse.ok(memberService.getMembers(teamspaceId, userId));
+            @AuthenticationPrincipal String userId) {
+        return GlobalResponse.ok(memberService.getMembers(teamspaceId, Long.parseLong(userId)));
     }
 }
