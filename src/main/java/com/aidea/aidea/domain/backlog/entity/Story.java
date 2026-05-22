@@ -114,4 +114,17 @@ public class Story {
             }
         }
     }
+
+    public void updateStatus(StoryStatus newStatus) {
+        if (this.status != newStatus) {
+            this.status = newStatus;
+            if (newStatus == StoryStatus.DONE || newStatus == StoryStatus.CLOSED) {
+                this.closedAt = LocalDateTime.now();
+            }
+        }
+    }
+
+    public void updatePosition(int position) {
+        this.position = position;
+    }
 }

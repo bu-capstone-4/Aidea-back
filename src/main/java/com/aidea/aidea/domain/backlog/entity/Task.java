@@ -72,4 +72,12 @@ public class Task {
         this.isCompleted = isCompleted;
         this.assignee = assignee;
     }
+
+    public void toggleCompleted() {
+        this.isCompleted = !this.isCompleted;
+    }
+
+    public void updatePosition(int position) {
+        this.position = position;
+    }
 }
