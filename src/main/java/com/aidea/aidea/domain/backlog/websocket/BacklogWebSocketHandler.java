@@ -3,9 +3,9 @@ package com.aidea.aidea.domain.backlog.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aidea.aidea.domain.backlog.dto.response.EpicResponse;
 import com.aidea.aidea.domain.backlog.dto.response.StorySummaryResponse;
+import com.aidea.aidea.domain.backlog.repository.EpicRepository;
+import com.aidea.aidea.domain.backlog.repository.StoryRepository;
 import com.aidea.aidea.domain.backlog.service.BacklogEventPublisher;
-import com.aidea.aidea.domain.backlog.service.EpicService;
-import com.aidea.aidea.domain.backlog.service.StoryService;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +31,8 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
     private final ConcurrentHashMap<String, Set<WebSocketSession>> teamspaceSessions =
             new ConcurrentHashMap<>();
 
-    private final EpicService epicService;
-    private final StoryService storyService;
+    private final EpicRepository epicRepository;
+    private final StoryRepository storyRepository;
     private final SocketErrorSender socketErrorSender;
     private final ObjectMapper objectMapper;
 
@@ -63,10 +63,10 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
     }
 
     private void sendInit(WebSocketSession session, String teamspaceId) throws Exception {
-        Long userId = Long.parseLong(getAttr(session, "userId"));
-
-        List<EpicResponse> epics = epicService.getEpics(teamspaceId, userId);
-        List<StorySummaryResponse> stories = storyService.getStories(teamspaceId, userId, null, null, null, null);
+        List<EpicResponse> epics = epicRepository.findAllWithCreatorByTeamspaceId(teamspaceId)
+                .stream().map(EpicResponse::from).toList();
+        List<StorySummaryResponse> stories = storyRepository.findAllWithRelationsByTeamspaceId(teamspaceId)
+                .stream().map(StorySummaryResponse::from).toList();
 
         Map<String, Object> initPayload = new LinkedHashMap<>();
         initPayload.put("type", "backlog:init");
