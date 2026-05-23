@@ -1,5 +1,7 @@
 package com.aidea.aidea.global.websocket;
 
+import com.aidea.aidea.domain.backlog.websocket.BacklogHandshakeInterceptor;
+import com.aidea.aidea.domain.backlog.websocket.BacklogWebSocketHandler;
 import com.aidea.aidea.domain.documents.websocket.DocumentHandshakeInterceptor;
 import com.aidea.aidea.domain.documents.websocket.DocumentWebSocketHandler;
 import lombok.RequiredArgsConstructor;
@@ -15,11 +17,17 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final DocumentWebSocketHandler documentWebSocketHandler;
     private final DocumentHandshakeInterceptor documentHandshakeInterceptor;
+    private final BacklogWebSocketHandler backlogWebSocketHandler;
+    private final BacklogHandshakeInterceptor backlogHandshakeInterceptor;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(documentWebSocketHandler, "/ws/documents/{docId}")
                 .setAllowedOrigins("*")
                 .addInterceptors(documentHandshakeInterceptor);
+
+        registry.addHandler(backlogWebSocketHandler, "/ws/backlog/{teamspaceId}")
+                .setAllowedOrigins("*")
+                .addInterceptors(backlogHandshakeInterceptor);
     }
 }
