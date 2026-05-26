@@ -1,8 +1,11 @@
 package com.aidea.aidea.domain.backlog.controller;
 
 import com.aidea.aidea.domain.backlog.dto.request.CreateEpicRequest;
+import com.aidea.aidea.domain.backlog.dto.request.ReorderRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateEpicRequest;
+import com.aidea.aidea.domain.backlog.dto.request.UpdateEpicStatusRequest;
 import com.aidea.aidea.domain.backlog.dto.response.EpicResponse;
+import com.aidea.aidea.domain.backlog.dto.response.ReorderResponse;
 import com.aidea.aidea.domain.backlog.service.EpicService;
 import com.aidea.aidea.global.dto.GlobalResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,6 +60,31 @@ public class EpicController {
 
         Long userId = Long.parseLong(userIdStr);
         EpicResponse response = epicService.updateEpic(teamspaceId, userId, epicId, request);
+        return ResponseEntity.ok(GlobalResponse.ok(response));
+    }
+
+    @Operation(summary = "에픽 상태 변경")
+    @PatchMapping("/{epicId}/status")
+    public ResponseEntity<GlobalResponse<EpicResponse>> changeStatus(
+            @PathVariable String teamspaceId,
+            @PathVariable Long epicId,
+            @AuthenticationPrincipal String userIdStr,
+            @Valid @RequestBody UpdateEpicStatusRequest request) {
+
+        Long userId = Long.parseLong(userIdStr);
+        EpicResponse response = epicService.changeStatus(teamspaceId, userId, epicId, request);
+        return ResponseEntity.ok(GlobalResponse.ok(response));
+    }
+
+    @Operation(summary = "에픽 순서 변경")
+    @PatchMapping("/reorder")
+    public ResponseEntity<GlobalResponse<ReorderResponse>> reorder(
+            @PathVariable String teamspaceId,
+            @AuthenticationPrincipal String userIdStr,
+            @Valid @RequestBody ReorderRequest request) {
+
+        Long userId = Long.parseLong(userIdStr);
+        ReorderResponse response = epicService.reorder(teamspaceId, userId, request);
         return ResponseEntity.ok(GlobalResponse.ok(response));
     }
 

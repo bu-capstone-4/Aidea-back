@@ -43,6 +43,7 @@ public enum ErrorCode {
     EPIC_NOT_FOUND(HttpStatus.NOT_FOUND, "EPIC_NOT_FOUND", "에픽을 찾을 수 없습니다."),
     STORY_NOT_FOUND(HttpStatus.NOT_FOUND, "STORY_NOT_FOUND", "스토리를 찾을 수 없습니다."),
     TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "태스크를 찾을 수 없습니다."),
+    BACKLOG_TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "BACKLOG_TASK_NOT_FOUND", "최상위 태스크를 찾을 수 없습니다."),
     BACKLOG_CONFIG_FIELD_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "BACKLOG_CONFIG_FIELD_NOT_ALLOWED", "백로그 설정에서 비활성화된 필드입니다.");
 
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)

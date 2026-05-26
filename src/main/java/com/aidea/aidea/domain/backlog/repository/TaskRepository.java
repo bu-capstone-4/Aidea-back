@@ -23,4 +23,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
         GROUP BY t.story.id
     """)
     List<Object[]> findTaskCountsByTeamspaceId(@Param("teamspaceId") String teamspaceId);
+
+    @Query("SELECT t FROM Task t LEFT JOIN FETCH t.assignee LEFT JOIN FETCH t.reporter WHERE t.teamspaceId = :teamspaceId AND t.story IS NULL ORDER BY t.position ASC")
+    List<Task> findStandaloneByTeamspaceId(@Param("teamspaceId") String teamspaceId);
+
+    @Query("SELECT COALESCE(MAX(t.number), 0) FROM Task t WHERE t.teamspaceId = :teamspaceId AND t.story IS NULL")
+    Long findMaxStandaloneNumberByTeamspaceId(@Param("teamspaceId") String teamspaceId);
+
+    List<Task> findByTeamspaceIdAndStoryIsNullAndIdIn(String teamspaceId, List<Long> ids);
 }

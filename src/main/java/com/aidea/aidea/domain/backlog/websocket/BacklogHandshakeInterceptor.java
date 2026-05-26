@@ -1,5 +1,7 @@
 package com.aidea.aidea.domain.backlog.websocket;
 
+import com.aidea.aidea.domain.auth.entity.User;
+import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
 import com.aidea.aidea.global.security.jwt.JwtTokenProvider;
@@ -25,6 +27,7 @@ public class BacklogHandshakeInterceptor implements HandshakeInterceptor {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
+    private final UserRepository userRepository;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
@@ -53,9 +56,13 @@ public class BacklogHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
+        User user = userRepository.findById(userId).orElse(null);
+
         attributes.put("teamSpaceId", teamspaceId);
         attributes.put("userId", userId.toString());
         attributes.put("role", memberOpt.get().getRole());
+        attributes.put("userName", user != null ? user.getName() : "");
+        attributes.put("profileImageUrl", user != null && user.getProfileImageUrl() != null ? user.getProfileImageUrl() : "");
 
         log.info("[WS-BACKLOG] handshake accepted userId={} teamspaceId={} role={}", userId, teamspaceId, memberOpt.get().getRole());
         return true;

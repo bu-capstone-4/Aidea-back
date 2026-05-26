@@ -91,13 +91,14 @@ public class Story {
     }
 
     public static Story create(Long number, String teamspaceId, String title, String body,
-                               Priority priority, IssueType issueType, String sprint,
+                               StoryStatus status, Priority priority, IssueType issueType, String sprint,
                                User assignee, User reporter, LocalDate dueDate, int position) {
         Story s = new Story();
         s.number = number;
         s.teamspaceId = teamspaceId;
         s.title = title;
         s.body = body;
+        s.status = status != null ? status : StoryStatus.OPEN;
         s.priority = priority;
         s.issueType = issueType;
         s.sprint = sprint;
@@ -105,7 +106,6 @@ public class Story {
         s.reporter = reporter;
         s.dueDate = dueDate;
         s.position = position;
-        s.status = StoryStatus.OPEN;
         return s;
     }
 

@@ -91,7 +91,7 @@ public class StoryService {
         List<Epic> epics = resolveEpics(teamspaceId, request.epicIds());
 
         Story story = Story.create(nextNumber, teamspaceId, request.title(), request.body(),
-                request.priority(), request.issueType(), request.sprint(),
+                request.status(), request.priority(), request.issueType(), request.sprint(),
                 assignee, reporter, request.dueDate(), maxPosition);
         epics.forEach(epic -> story.getStoryEpics().add(StoryEpic.create(story, epic)));
         Story saved = storyRepository.save(story);
