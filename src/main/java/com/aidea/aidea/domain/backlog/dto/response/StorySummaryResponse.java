@@ -28,8 +28,7 @@ public record StorySummaryResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
-    public static StorySummaryResponse from(Story story) {
-        List<Task> tasks = story.getTasks();
+    public static StorySummaryResponse from(Story story, int taskCount, int completedTaskCount) {
         return new StorySummaryResponse(
                 story.getId(),
                 story.getNumber(),
@@ -43,12 +42,17 @@ public record StorySummaryResponse(
                         .toList(),
                 story.getAssignee() != null ? UserResponse.from(story.getAssignee()) : null,
                 UserResponse.from(story.getReporter()),
-                tasks.size(),
-                (int) tasks.stream().filter(Task::isCompleted).count(),
+                taskCount,
+                completedTaskCount,
                 story.getDueDate(),
                 story.getPosition(),
                 story.getCreatedAt(),
                 story.getUpdatedAt()
         );
+    }
+
+    public static StorySummaryResponse from(Story story) {
+        List<Task> tasks = story.getTasks();
+        return from(story, tasks.size(), (int) tasks.stream().filter(Task::isCompleted).count());
     }
 }

@@ -4,6 +4,7 @@ import com.aidea.aidea.domain.backlog.entity.IssueType;
 import com.aidea.aidea.domain.backlog.entity.Priority;
 import com.aidea.aidea.domain.backlog.entity.Story;
 import com.aidea.aidea.domain.backlog.entity.StoryStatus;
+import com.aidea.aidea.domain.backlog.entity.Task;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +30,10 @@ public record StoryDetailResponse(
         List<TaskResponse> tasks
 ) {
     public static StoryDetailResponse from(Story story) {
+        return from(story, story.getTasks());
+    }
+
+    public static StoryDetailResponse from(Story story, List<Task> tasks) {
         return new StoryDetailResponse(
                 story.getId(),
                 story.getNumber(),
@@ -48,7 +53,7 @@ public record StoryDetailResponse(
                 story.getCreatedAt(),
                 story.getUpdatedAt(),
                 story.getClosedAt(),
-                story.getTasks().stream()
+                tasks.stream()
                         .map(TaskResponse::from)
                         .toList()
         );

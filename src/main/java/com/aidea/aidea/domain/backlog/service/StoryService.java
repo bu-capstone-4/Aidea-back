@@ -10,6 +10,7 @@ import com.aidea.aidea.domain.backlog.entity.*;
 import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
+import com.aidea.aidea.domain.backlog.repository.TaskRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
@@ -18,6 +19,8 @@ import com.aidea.aidea.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.aidea.aidea.domain.backlog.entity.Task;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -31,6 +34,7 @@ import java.util.stream.Collectors;
 public class StoryService {
 
     private final StoryRepository storyRepository;
+    private final TaskRepository taskRepository;
     private final EpicRepository epicRepository;
     private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
@@ -62,7 +66,8 @@ public class StoryService {
         getMemberOrThrow(teamspaceId, userId);
         Story story = storyRepository.findDetailByIdAndTeamspaceId(storyId, teamspaceId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STORY_NOT_FOUND));
-        return StoryDetailResponse.from(story);
+        List<Task> tasks = taskRepository.findWithAssigneeByStoryId(storyId);
+        return StoryDetailResponse.from(story, tasks);
     }
 
     public StoryDetailResponse createStory(String teamspaceId, Long userId, CreateStoryRequest request) {
@@ -117,7 +122,8 @@ public class StoryService {
         story.getStoryEpics().clear();
         epics.forEach(epic -> story.getStoryEpics().add(StoryEpic.create(story, epic)));
 
-        StoryDetailResponse response = StoryDetailResponse.from(story);
+        List<Task> tasks = taskRepository.findWithAssigneeByStoryId(storyId);
+        StoryDetailResponse response = StoryDetailResponse.from(story, tasks);
         broadcast(teamspaceId, userId, "story:updated", Map.of("story", StorySummaryResponse.from(story)));
         return response;
     }

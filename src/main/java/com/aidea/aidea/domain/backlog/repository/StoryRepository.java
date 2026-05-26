@@ -30,8 +30,6 @@ public interface StoryRepository extends JpaRepository<Story, Long> {
         LEFT JOIN FETCH s.reporter
         LEFT JOIN FETCH s.storyEpics se
         LEFT JOIN FETCH se.epic
-        LEFT JOIN FETCH s.tasks t
-        LEFT JOIN FETCH t.assignee
         WHERE s.id = :storyId AND s.teamspaceId = :teamspaceId
     """)
     Optional<Story> findDetailByIdAndTeamspaceId(

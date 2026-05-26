@@ -7,6 +7,7 @@ import com.aidea.aidea.domain.backlog.dto.response.StorySummaryResponse;
 import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
+import com.aidea.aidea.domain.backlog.repository.TaskRepository;
 import com.aidea.aidea.domain.backlog.service.BacklogEventPublisher;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
@@ -19,6 +20,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
 
     private final EpicRepository epicRepository;
     private final StoryRepository storyRepository;
+    private final TaskRepository taskRepository;
     private final BacklogConfigRepository backlogConfigRepository;
     private final SocketErrorSender socketErrorSender;
     private final ObjectMapper objectMapper;
@@ -71,8 +74,21 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
                 .orElse(BacklogConfigResponse.defaultFor(teamspaceId));
         List<EpicResponse> epics = epicRepository.findAllWithCreatorByTeamspaceId(teamspaceId)
                 .stream().map(EpicResponse::from).toList();
+
+        Map<Long, int[]> taskCounts = new HashMap<>();
+        taskRepository.findTaskCountsByTeamspaceId(teamspaceId)
+                .forEach(row -> taskCounts.put(
+                        (Long) row[0],
+                        new int[]{((Number) row[1]).intValue(), ((Number) row[2]).intValue()}
+                ));
+
         List<StorySummaryResponse> stories = storyRepository.findAllWithRelationsByTeamspaceId(teamspaceId)
-                .stream().map(StorySummaryResponse::from).toList();
+                .stream()
+                .map(s -> {
+                    int[] counts = taskCounts.getOrDefault(s.getId(), new int[]{0, 0});
+                    return StorySummaryResponse.from(s, counts[0], counts[1]);
+                })
+                .toList();
 
         Map<String, Object> initPayload = new LinkedHashMap<>();
         initPayload.put("type", "backlog:init");
