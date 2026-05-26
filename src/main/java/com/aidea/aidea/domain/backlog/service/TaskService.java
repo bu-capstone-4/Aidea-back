@@ -9,8 +9,11 @@ import com.aidea.aidea.domain.backlog.dto.request.ReorderRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateTaskRequest;
 import com.aidea.aidea.domain.backlog.dto.response.ReorderResponse;
 import com.aidea.aidea.domain.backlog.dto.response.TaskResponse;
+import com.aidea.aidea.domain.backlog.entity.BacklogConfig;
+import com.aidea.aidea.domain.backlog.entity.IssueType;
 import com.aidea.aidea.domain.backlog.entity.Story;
 import com.aidea.aidea.domain.backlog.entity.Task;
+import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
 import com.aidea.aidea.domain.backlog.repository.TaskRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
@@ -34,6 +37,7 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final StoryRepository storyRepository;
+    private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final UserRepository userRepository;
     private final BacklogEventPublisher eventPublisher;
@@ -42,6 +46,8 @@ public class TaskService {
     public TaskResponse createTask(String teamspaceId, Long userId, Long storyId, CreateTaskRequest request) {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
+
+        validateTaskFields(teamspaceId, request.issueType());
 
         Story story = getStoryInTeamspace(storyId, teamspaceId);
         int maxPosition = story.getTasks().stream()
@@ -54,7 +60,7 @@ public class TaskService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
                 : null;
 
-        Task task = Task.create(story, request.title(), assignee, maxPosition, creator);
+        Task task = Task.create(story, request.title(), request.issueType(), assignee, maxPosition, creator);
         Task saved = taskRepository.save(task);
 
         TaskResponse response = TaskResponse.from(saved);
@@ -67,6 +73,8 @@ public class TaskService {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
 
+        validateTaskFields(teamspaceId, request.issueType());
+
         getStoryInTeamspace(storyId, teamspaceId);
         Task task = getTaskInStory(taskId, storyId);
 
@@ -74,7 +82,7 @@ public class TaskService {
                 ? userRepository.findById(request.assigneeId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND))
                 : null;
-        task.update(request.title(), task.isCompleted(), assignee);
+        task.update(request.title(), request.issueType(), assignee);
 
         TaskResponse response = TaskResponse.from(task);
         broadcast(teamspaceId, userId, "task:updated", Map.of("storyId", storyId, "task", response));
@@ -126,6 +134,14 @@ public class TaskService {
         taskRepository.delete(task);
 
         broadcast(teamspaceId, userId, "task:deleted", Map.of("storyId", storyId, "taskId", taskId));
+    }
+
+    private void validateTaskFields(String teamspaceId, IssueType issueType) {
+        if (issueType == null) return;
+        BacklogConfig config = backlogConfigRepository.findById(teamspaceId).orElse(null);
+        if (config != null && !config.isFeBeEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
     }
 
     private TeamspaceMember getMemberOrThrow(String teamspaceId, Long userId) {

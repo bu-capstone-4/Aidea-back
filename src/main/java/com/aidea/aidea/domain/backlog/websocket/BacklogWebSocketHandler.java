@@ -1,8 +1,10 @@
 package com.aidea.aidea.domain.backlog.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aidea.aidea.domain.backlog.dto.response.BacklogConfigResponse;
 import com.aidea.aidea.domain.backlog.dto.response.EpicResponse;
 import com.aidea.aidea.domain.backlog.dto.response.StorySummaryResponse;
+import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
 import com.aidea.aidea.domain.backlog.service.BacklogEventPublisher;
@@ -33,6 +35,7 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
 
     private final EpicRepository epicRepository;
     private final StoryRepository storyRepository;
+    private final BacklogConfigRepository backlogConfigRepository;
     private final SocketErrorSender socketErrorSender;
     private final ObjectMapper objectMapper;
 
@@ -63,6 +66,9 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
     }
 
     private void sendInit(WebSocketSession session, String teamspaceId) throws Exception {
+        BacklogConfigResponse config = backlogConfigRepository.findById(teamspaceId)
+                .map(BacklogConfigResponse::from)
+                .orElse(BacklogConfigResponse.defaultFor(teamspaceId));
         List<EpicResponse> epics = epicRepository.findAllWithCreatorByTeamspaceId(teamspaceId)
                 .stream().map(EpicResponse::from).toList();
         List<StorySummaryResponse> stories = storyRepository.findAllWithRelationsByTeamspaceId(teamspaceId)
@@ -70,6 +76,7 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
 
         Map<String, Object> initPayload = new LinkedHashMap<>();
         initPayload.put("type", "backlog:init");
+        initPayload.put("config", config);
         initPayload.put("epics", epics);
         initPayload.put("stories", stories);
 

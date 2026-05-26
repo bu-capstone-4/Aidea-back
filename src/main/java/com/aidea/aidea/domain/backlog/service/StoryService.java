@@ -7,6 +7,7 @@ import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.backlog.dto.request.*;
 import com.aidea.aidea.domain.backlog.dto.response.*;
 import com.aidea.aidea.domain.backlog.entity.*;
+import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,7 @@ public class StoryService {
 
     private final StoryRepository storyRepository;
     private final EpicRepository epicRepository;
+    private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final UserRepository userRepository;
     private final BacklogEventPublisher eventPublisher;
@@ -66,6 +69,10 @@ public class StoryService {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
 
+        validateIssueTypeEnabled(teamspaceId, "story");
+        validateStoryFields(teamspaceId, request.issueType(), request.priority(),
+                request.sprint(), request.dueDate());
+
         long nextNumber = storyRepository.findMaxNumberByTeamspaceId(teamspaceId) + 1;
         int maxPosition = storyRepository.findAllWithRelationsByTeamspaceId(teamspaceId)
                 .stream().mapToInt(Story::getPosition).max().orElse(0) + 1000;
@@ -79,7 +86,8 @@ public class StoryService {
         List<Epic> epics = resolveEpics(teamspaceId, request.epicIds());
 
         Story story = Story.create(nextNumber, teamspaceId, request.title(), request.body(),
-                request.priority(), assignee, reporter, request.dueDate(), maxPosition);
+                request.priority(), request.issueType(), request.sprint(),
+                assignee, reporter, request.dueDate(), maxPosition);
         epics.forEach(epic -> story.getStoryEpics().add(StoryEpic.create(story, epic)));
         Story saved = storyRepository.save(story);
 
@@ -92,6 +100,9 @@ public class StoryService {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
 
+        validateStoryFields(teamspaceId, request.issueType(), request.priority(),
+                request.sprint(), request.dueDate());
+
         Story story = storyRepository.findDetailByIdAndTeamspaceId(storyId, teamspaceId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STORY_NOT_FOUND));
 
@@ -101,8 +112,8 @@ public class StoryService {
                 : null;
         List<Epic> epics = resolveEpics(teamspaceId, request.epicIds());
 
-        story.update(request.title(), request.body(), story.getStatus(),
-                request.priority(), assignee, request.dueDate());
+        story.update(request.title(), request.body(), request.priority(),
+                request.issueType(), request.sprint(), assignee, request.dueDate());
         story.getStoryEpics().clear();
         epics.forEach(epic -> story.getStoryEpics().add(StoryEpic.create(story, epic)));
 
@@ -177,6 +188,37 @@ public class StoryService {
     private void validateBelongsToTeamspace(Story story, String teamspaceId) {
         if (!story.getTeamspaceId().equals(teamspaceId)) {
             throw new CustomException(ErrorCode.STORY_NOT_FOUND);
+        }
+    }
+
+    /** 스토리 자체(이슈 유형)가 활성화돼 있는지 검증. config가 없으면 허용. */
+    private void validateIssueTypeEnabled(String teamspaceId, String issueKind) {
+        BacklogConfig config = backlogConfigRepository.findById(teamspaceId).orElse(null);
+        if (config == null) return;
+        if ("story".equals(issueKind) && !config.isStoryEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
+        if ("epic".equals(issueKind) && !config.isEpicEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
+    }
+
+    /** 스토리의 추가 필드(priority, sprint, dueDate, issueType)가 허용됐는지 검증. */
+    private void validateStoryFields(String teamspaceId, IssueType issueType, Priority priority,
+                                     String sprint, LocalDate dueDate) {
+        BacklogConfig config = backlogConfigRepository.findById(teamspaceId).orElse(null);
+        if (config == null) return;
+        if (issueType != null && !config.isFeBeEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
+        if (priority != null && !config.isPriorityEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
+        if (sprint != null && !config.isSprintEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
+        if (dueDate != null && !config.isDueDateEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
         }
     }
 

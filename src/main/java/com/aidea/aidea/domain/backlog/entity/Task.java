@@ -28,6 +28,10 @@ public class Task {
     @Column(nullable = false)
     private boolean isCompleted = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private IssueType issueType;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private User assignee;
@@ -56,10 +60,11 @@ public class Task {
         updatedAt = LocalDateTime.now();
     }
 
-    public static Task create(Story story, String title, User assignee, int position, User createdBy) {
+    public static Task create(Story story, String title, IssueType issueType, User assignee, int position, User createdBy) {
         Task t = new Task();
         t.story = story;
         t.title = title;
+        t.issueType = issueType;
         t.assignee = assignee;
         t.position = position;
         t.createdBy = createdBy;
@@ -67,9 +72,9 @@ public class Task {
         return t;
     }
 
-    public void update(String title, boolean isCompleted, User assignee) {
+    public void update(String title, IssueType issueType, User assignee) {
         this.title = title;
-        this.isCompleted = isCompleted;
+        this.issueType = issueType;
         this.assignee = assignee;
     }
 

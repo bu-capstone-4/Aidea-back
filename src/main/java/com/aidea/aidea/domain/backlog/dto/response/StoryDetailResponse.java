@@ -1,5 +1,6 @@
 package com.aidea.aidea.domain.backlog.dto.response;
 
+import com.aidea.aidea.domain.backlog.entity.IssueType;
 import com.aidea.aidea.domain.backlog.entity.Priority;
 import com.aidea.aidea.domain.backlog.entity.Story;
 import com.aidea.aidea.domain.backlog.entity.StoryStatus;
@@ -15,6 +16,8 @@ public record StoryDetailResponse(
         String body,
         StoryStatus status,
         Priority priority,
+        IssueType issueType,
+        String sprint,
         List<EpicSummaryResponse> epics,
         UserResponse assignee,
         UserResponse reporter,
@@ -33,6 +36,8 @@ public record StoryDetailResponse(
                 story.getBody(),
                 story.getStatus(),
                 story.getPriority(),
+                story.getIssueType(),
+                story.getSprint(),
                 story.getStoryEpics().stream()
                         .map(se -> EpicSummaryResponse.from(se.getEpic()))
                         .toList(),

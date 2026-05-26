@@ -44,6 +44,13 @@ public class Story {
     @Column(length = 10)
     private Priority priority;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private IssueType issueType;
+
+    @Column(length = 100)
+    private String sprint;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private User assignee;
@@ -84,14 +91,16 @@ public class Story {
     }
 
     public static Story create(Long number, String teamspaceId, String title, String body,
-                               Priority priority, User assignee, User reporter,
-                               LocalDate dueDate, int position) {
+                               Priority priority, IssueType issueType, String sprint,
+                               User assignee, User reporter, LocalDate dueDate, int position) {
         Story s = new Story();
         s.number = number;
         s.teamspaceId = teamspaceId;
         s.title = title;
         s.body = body;
         s.priority = priority;
+        s.issueType = issueType;
+        s.sprint = sprint;
         s.assignee = assignee;
         s.reporter = reporter;
         s.dueDate = dueDate;
@@ -100,19 +109,15 @@ public class Story {
         return s;
     }
 
-    public void update(String title, String body, StoryStatus status,
-                       Priority priority, User assignee, LocalDate dueDate) {
+    public void update(String title, String body, Priority priority, IssueType issueType,
+                       String sprint, User assignee, LocalDate dueDate) {
         this.title = title;
         this.body = body;
         this.priority = priority;
+        this.issueType = issueType;
+        this.sprint = sprint;
         this.assignee = assignee;
         this.dueDate = dueDate;
-        if (this.status != status) {
-            this.status = status;
-            if (status == StoryStatus.DONE || status == StoryStatus.CLOSED) {
-                this.closedAt = LocalDateTime.now();
-            }
-        }
     }
 
     public void updateStatus(StoryStatus newStatus) {

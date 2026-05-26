@@ -7,7 +7,9 @@ import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.backlog.dto.request.CreateEpicRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateEpicRequest;
 import com.aidea.aidea.domain.backlog.dto.response.EpicResponse;
+import com.aidea.aidea.domain.backlog.entity.BacklogConfig;
 import com.aidea.aidea.domain.backlog.entity.Epic;
+import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
@@ -28,6 +30,7 @@ import java.util.Map;
 public class EpicService {
 
     private final EpicRepository epicRepository;
+    private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final UserRepository userRepository;
     private final BacklogEventPublisher eventPublisher;
@@ -43,6 +46,8 @@ public class EpicService {
     public EpicResponse createEpic(String teamspaceId, Long userId, CreateEpicRequest request) {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
+
+        validateEpicEnabled(teamspaceId);
 
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
@@ -79,6 +84,13 @@ public class EpicService {
 
         epicRepository.delete(epic);
         broadcast(teamspaceId, userId, "epic:deleted", Map.of("epicId", epicId));
+    }
+
+    private void validateEpicEnabled(String teamspaceId) {
+        BacklogConfig config = backlogConfigRepository.findById(teamspaceId).orElse(null);
+        if (config != null && !config.isEpicEnabled()) {
+            throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
+        }
     }
 
     private TeamspaceMember getMemberOrThrow(String teamspaceId, Long userId) {
