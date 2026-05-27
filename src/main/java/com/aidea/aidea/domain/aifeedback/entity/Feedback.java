@@ -43,6 +43,10 @@ public class Feedback {
     private String originalMarkdown;
 
     @Setter
+    @Column(name = "idea_markdown", columnDefinition = "MEDIUMTEXT")
+    private String ideaMarkdown;
+
+    @Setter
     @Column(name = "revised_markdown", columnDefinition = "MEDIUMTEXT")
     private String revisedMarkdown;
 
@@ -59,7 +63,8 @@ public class Feedback {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    public static Feedback create(String id, Document document, User requestedBy, String originalMarkdown, String additionalRequest) {
+    public static Feedback create(String id, Document document, User requestedBy,
+                                  String originalMarkdown, String additionalRequest, String ideaMarkdown) {
         Feedback f = new Feedback();
 
         f.id = id;
@@ -67,6 +72,7 @@ public class Feedback {
         f.requestedBy = requestedBy;
         f.originalMarkdown = originalMarkdown;
         f.additionalRequest = additionalRequest;
+        f.ideaMarkdown = ideaMarkdown;
         f.status = FeedbackStatus.PENDING;
         f.createdAt = LocalDateTime.now();
         return f;

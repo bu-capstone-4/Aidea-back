@@ -11,6 +11,7 @@ import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
+import com.aidea.aidea.domain.documents.entity.DocumentType;
 import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
@@ -79,12 +80,32 @@ public class FeedbackService {
         }
         log.debug("[FEEDBACK] extractedText docId={} length={}", docId, originalMarkdown.length());
 
+        // IDEA 타입이 아닌 문서일 때 같은 팀스페이스의 아이디어 문서 내용을 함께 전달
+        String ideaMarkdown = null;
+        if (document.getType() != DocumentType.IDEA) {
+            String teamspaceId = document.getTeamspace().getTeamspaceId();
+            ideaMarkdown = documentRepository.findByTeamspaceId(teamspaceId).stream()
+                    .filter(d -> d.getType() == DocumentType.IDEA)
+                    .findFirst()
+                    .map(ideaDoc -> {
+                        byte[] ideaSnapshot = ideaDoc.getYjsSnapshot();
+                        List<byte[]> ideaUpdates = documentUpdateRepository
+                                .findByDocumentIdOrderByIdAsc(ideaDoc.getId())
+                                .stream().map(DocumentUpdate::getUpdateBinary).toList();
+                        String extracted = YjsTextExtractor.extractText(ideaSnapshot, ideaUpdates);
+                        log.debug("[FEEDBACK] ideaDoc extracted docId={} length={}", ideaDoc.getId(), extracted.length());
+                        return extracted.isBlank() ? null : extracted;
+                    })
+                    .orElse(null);
+        }
+
         Feedback feedback = Feedback.create(
                 UUID.randomUUID().toString(),
                 document,
                 user,
                 originalMarkdown,
-                request.additionalRequest()
+                request.additionalRequest(),
+                ideaMarkdown
         );
         feedbackRepository.save(feedback);
 

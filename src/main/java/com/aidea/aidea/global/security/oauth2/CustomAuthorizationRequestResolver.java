@@ -6,8 +6,6 @@ import org.springframework.security.oauth2.client.web.DefaultOAuth2Authorization
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 public class CustomAuthorizationRequestResolver implements OAuth2AuthorizationRequestResolver {
 
@@ -30,10 +28,6 @@ public class CustomAuthorizationRequestResolver implements OAuth2AuthorizationRe
 
     private OAuth2AuthorizationRequest customize(OAuth2AuthorizationRequest request) {
         if (request == null) return null;
-        Map<String, Object> additionalParameters = new LinkedHashMap<>(request.getAdditionalParameters());
-        additionalParameters.put("login", "");  // GitHub 로그인 화면 강제 표시
-        return OAuth2AuthorizationRequest.from(request)
-                .additionalParameters(additionalParameters)
-                .build();
+        return request;
     }
 }
