@@ -1,6 +1,7 @@
 package com.aidea.aidea.domain.backlog.controller;
 
 import com.aidea.aidea.domain.backlog.dto.request.CreateBacklogTaskRequest;
+import com.aidea.aidea.domain.backlog.dto.request.LinkStoryRequest;
 import com.aidea.aidea.domain.backlog.dto.request.ReorderRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateBacklogTaskRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateBacklogTaskStatusRequest;
@@ -72,6 +73,19 @@ public class BacklogTaskController {
 
         Long userId = Long.parseLong(userIdStr);
         ReorderResponse response = backlogTaskService.reorder(teamspaceId, userId, request);
+        return ResponseEntity.ok(GlobalResponse.ok(response));
+    }
+
+    @Operation(summary = "최상위 태스크 상위 스토리 연결/해제")
+    @PatchMapping("/{taskId}/story")
+    public ResponseEntity<GlobalResponse<BacklogTaskResponse>> linkStory(
+            @PathVariable String teamspaceId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal String userIdStr,
+            @RequestBody LinkStoryRequest request) {
+
+        Long userId = Long.parseLong(userIdStr);
+        BacklogTaskResponse response = backlogTaskService.linkStory(teamspaceId, userId, taskId, request);
         return ResponseEntity.ok(GlobalResponse.ok(response));
     }
 

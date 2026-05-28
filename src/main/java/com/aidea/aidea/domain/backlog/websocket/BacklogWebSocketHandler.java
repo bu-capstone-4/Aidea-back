@@ -180,8 +180,6 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
 
         TextMessage message = new TextMessage(jsonEvent);
         sessions.forEach(session -> {
-            if (actorUserId.equals(getAttr(session, "userId"))) return;
-
             if (session.isOpen()) {
                 try {
                     session.sendMessage(message);

@@ -20,6 +20,7 @@ public record BacklogTaskResponse(
         UserResponse reporter,
         LocalDate dueDate,
         int position,
+        Long storyId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -36,6 +37,7 @@ public record BacklogTaskResponse(
                 task.getReporter() != null ? UserResponse.from(task.getReporter()) : null,
                 task.getDueDate(),
                 task.getPosition(),
+                task.getLinkedStoryId(),
                 task.getCreatedAt(),
                 task.getUpdatedAt()
         );

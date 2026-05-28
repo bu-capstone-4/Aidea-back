@@ -14,5 +14,6 @@ public record CreateBacklogTaskRequest(
         IssueType issueType,
         String sprint,
         Long assigneeId,
-        LocalDate dueDate
+        LocalDate dueDate,
+        Long storyId
 ) {}

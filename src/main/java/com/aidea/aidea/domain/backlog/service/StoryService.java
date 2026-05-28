@@ -67,7 +67,8 @@ public class StoryService {
         Story story = storyRepository.findDetailByIdAndTeamspaceId(storyId, teamspaceId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STORY_NOT_FOUND));
         List<Task> tasks = taskRepository.findWithAssigneeByStoryId(storyId);
-        return StoryDetailResponse.from(story, tasks);
+        List<Task> linkedTasks = taskRepository.findLinkedTasksByStoryId(storyId);
+        return StoryDetailResponse.from(story, tasks, linkedTasks);
     }
 
     public StoryDetailResponse createStory(String teamspaceId, Long userId, CreateStoryRequest request) {
@@ -123,7 +124,8 @@ public class StoryService {
         epics.forEach(epic -> story.getStoryEpics().add(StoryEpic.create(story, epic)));
 
         List<Task> tasks = taskRepository.findWithAssigneeByStoryId(storyId);
-        StoryDetailResponse response = StoryDetailResponse.from(story, tasks);
+        List<Task> linkedTasks = taskRepository.findLinkedTasksByStoryId(storyId);
+        StoryDetailResponse response = StoryDetailResponse.from(story, tasks, linkedTasks);
         broadcast(teamspaceId, userId, "story:updated", Map.of("story", StorySummaryResponse.from(story)));
         return response;
     }
@@ -175,6 +177,8 @@ public class StoryService {
         Story story = storyRepository.findById(storyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STORY_NOT_FOUND));
         validateBelongsToTeamspace(story, teamspaceId);
+
+        taskRepository.findByLinkedStoryId(storyId).forEach(Task::unlinkFromStory);
 
         storyRepository.delete(story);
         broadcast(teamspaceId, userId, "story:deleted", Map.of("storyId", storyId));

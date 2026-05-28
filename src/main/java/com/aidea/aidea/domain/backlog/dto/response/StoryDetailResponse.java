@@ -27,13 +27,18 @@ public record StoryDetailResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime closedAt,
-        List<TaskResponse> tasks
+        List<TaskResponse> tasks,
+        List<BacklogTaskResponse> linkedTasks
 ) {
     public static StoryDetailResponse from(Story story) {
-        return from(story, story.getTasks());
+        return from(story, story.getTasks(), List.of());
     }
 
     public static StoryDetailResponse from(Story story, List<Task> tasks) {
+        return from(story, tasks, List.of());
+    }
+
+    public static StoryDetailResponse from(Story story, List<Task> tasks, List<Task> linkedTasks) {
         return new StoryDetailResponse(
                 story.getId(),
                 story.getNumber(),
@@ -55,6 +60,9 @@ public record StoryDetailResponse(
                 story.getClosedAt(),
                 tasks.stream()
                         .map(TaskResponse::from)
+                        .toList(),
+                linkedTasks.stream()
+                        .map(BacklogTaskResponse::from)
                         .toList()
         );
     }

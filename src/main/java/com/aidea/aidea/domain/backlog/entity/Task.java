@@ -23,6 +23,10 @@ public class Task {
     @JoinColumn(name = "story_id")
     private Story story;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "linked_story_id")
+    private Story linkedStory;
+
     @Column(length = 100)
     private String teamspaceId;
 
@@ -155,5 +159,17 @@ public class Task {
 
     public boolean isStandalone() {
         return this.story == null;
+    }
+
+    public Long getLinkedStoryId() {
+        return linkedStory != null ? linkedStory.getId() : null;
+    }
+
+    public void linkToStory(Story story) {
+        this.linkedStory = story;
+    }
+
+    public void unlinkFromStory() {
+        this.linkedStory = null;
     }
 }

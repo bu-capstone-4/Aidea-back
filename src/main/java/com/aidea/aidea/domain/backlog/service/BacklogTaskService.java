@@ -5,14 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.backlog.dto.request.CreateBacklogTaskRequest;
+import com.aidea.aidea.domain.backlog.dto.request.LinkStoryRequest;
 import com.aidea.aidea.domain.backlog.dto.request.ReorderRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateBacklogTaskRequest;
 import com.aidea.aidea.domain.backlog.dto.request.UpdateBacklogTaskStatusRequest;
 import com.aidea.aidea.domain.backlog.dto.response.BacklogTaskResponse;
 import com.aidea.aidea.domain.backlog.dto.response.ReorderResponse;
 import com.aidea.aidea.domain.backlog.entity.BacklogConfig;
+import com.aidea.aidea.domain.backlog.entity.Story;
 import com.aidea.aidea.domain.backlog.entity.Task;
 import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
+import com.aidea.aidea.domain.backlog.repository.StoryRepository;
 import com.aidea.aidea.domain.backlog.repository.TaskRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
@@ -34,6 +37,7 @@ import java.util.stream.Collectors;
 public class BacklogTaskService {
 
     private final TaskRepository taskRepository;
+    private final StoryRepository storyRepository;
     private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final UserRepository userRepository;
@@ -56,6 +60,10 @@ public class BacklogTaskService {
         Task task = Task.createStandalone(teamspaceId, nextNumber, request.title(),
                 request.status(), request.priority(), request.issueType(),
                 request.sprint(), assignee, reporter, request.dueDate(), maxPosition);
+        if (request.storyId() != null) {
+            Story linkedStory = resolveLinkedStory(teamspaceId, request.storyId());
+            task.linkToStory(linkedStory);
+        }
         Task saved = taskRepository.save(task);
 
         BacklogTaskResponse response = BacklogTaskResponse.from(saved);
@@ -73,6 +81,13 @@ public class BacklogTaskService {
         User assignee = resolveUser(request.assigneeId());
         task.updateStandalone(request.title(), request.status(), request.priority(),
                 request.issueType(), request.sprint(), assignee, request.dueDate());
+
+        if (request.storyId() == null) {
+            task.unlinkFromStory();
+        } else {
+            Story linkedStory = resolveLinkedStory(teamspaceId, request.storyId());
+            task.linkToStory(linkedStory);
+        }
 
         BacklogTaskResponse response = BacklogTaskResponse.from(task);
         broadcast(teamspaceId, userId, "backlogtask:updated", Map.of("task", response));
@@ -114,6 +129,28 @@ public class BacklogTaskService {
         return response;
     }
 
+    public BacklogTaskResponse linkStory(String teamspaceId, Long userId, Long taskId,
+                                         LinkStoryRequest request) {
+        TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
+        requireWritePermission(member.getRole());
+
+        Task task = getStandaloneTaskInTeamspace(taskId, teamspaceId);
+
+        if (request.storyId() == null) {
+            task.unlinkFromStory();
+        } else {
+            Story linkedStory = resolveLinkedStory(teamspaceId, request.storyId());
+            task.linkToStory(linkedStory);
+        }
+
+        BacklogTaskResponse response = BacklogTaskResponse.from(task);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("taskId", taskId);
+        payload.put("storyId", request.storyId());
+        broadcast(teamspaceId, userId, "backlogtask:story_changed", payload);
+        return response;
+    }
+
     public void deleteTask(String teamspaceId, Long userId, Long taskId) {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
@@ -149,6 +186,15 @@ public class BacklogTaskService {
         if (dueDate != null && !config.isDueDateEnabled()) {
             throw new CustomException(ErrorCode.BACKLOG_CONFIG_FIELD_NOT_ALLOWED);
         }
+    }
+
+    private Story resolveLinkedStory(String teamspaceId, Long storyId) {
+        Story story = storyRepository.findById(storyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.STORY_NOT_FOUND));
+        if (!story.getTeamspaceId().equals(teamspaceId)) {
+            throw new CustomException(ErrorCode.STORY_NOT_FOUND);
+        }
+        return story;
     }
 
     private User resolveUser(Long userId) {
