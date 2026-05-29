@@ -1,0 +1,24 @@
+Merge branch 'feat/46-gemini-feedback' of https://github.com/bu-capstone-4/Aidea-back into feat/46-gemini-feedback
+
+# Conflicts:
+#	.gitignore
+#	build.gradle
+#
+# It looks like you may be committing a merge.
+# If this is not correct, please run
+#	git update-ref -d MERGE_HEAD
+# and try again.
+
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch feat/46-gemini-feedback
+# Your branch and 'origin/feat/46-gemini-feedback' have diverged,
+# and have 2 and 1 different commits each, respectively.
+#
+# All conflicts fixed but you are still merging.
+#
+# Changes not staged for commit:
+#	modified:   aidea (modified content)
+#

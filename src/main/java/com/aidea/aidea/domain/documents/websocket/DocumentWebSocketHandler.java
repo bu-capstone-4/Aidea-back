@@ -3,8 +3,10 @@ package com.aidea.aidea.domain.documents.websocket;
 import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
 import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
+import com.aidea.aidea.domain.documents.dto.ActiveDraftInfo;
 import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
+import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
@@ -43,6 +45,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
     private final DocumentUpdateBuffer updateBuffer;
     private final DocumentService documentService;
     private final FeedbackRepository feedbackRepository;
+    private final DraftRepository draftRepository;
     private final ObjectMapper objectMapper;
     private final SocketErrorSender socketErrorSender;
 
@@ -141,10 +144,15 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
                 session.getId(), docId, snapshot != null, dbUpdates.size(),
                 activeFeedback != null ? activeFeedback.status() : "none");
 
+        ActiveDraftInfo activeDraft = draftRepository.findByDocumentId(docId)
+                .map(d -> new ActiveDraftInfo(d.getId(), d.getStatus(), d.getContent()))
+                .orElse(null);
+
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("type", "doc:init");
         event.put("updates", updates);
         event.put("activeFeedback", activeFeedback);
+        event.put("activeDraft", activeDraft);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
 

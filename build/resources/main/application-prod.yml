@@ -1,0 +1,19 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            redirect-uri: https://aidea-bu.duckdns.org/login/oauth2/code/github
+
+frontend:
+  url: ${FRONTEND_URL}
+
+app:
+  cookie:
+    secure: true
+
+# 로그 레벨은 logback-spring.xml 의 springProfile name="prod" 블록에서 관리합니다.

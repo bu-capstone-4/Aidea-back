@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew compileJava -x test)",
+      "Bash(./gradlew bootRun *)",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)",
+      "Bash(curl *)",
+      "Bash(java -jar build/libs/aidea-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(xargs ls -la)",
+      "Bash(xargs cat)",
+      "Read(//private/tmp/**)",
+      "Bash(xargs kill -9)",
+      "Bash(java -Dspring.output.ansi.enabled=never -Dlogging.level.com.aidea.aidea=DEBUG -jar build/libs/aidea-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev --logging.file.name=/tmp/aidea-server.log)",
+      "Bash(./gradlew build *)",
+      "Read(//Users/gaeunssss/Desktop/Aidea-front/**)",
+      "Bash(xargs ls)",
+      "Bash(python3 *)",
+      "Bash(mysql *)"
+    ]
+  }
+}

@@ -1,0 +1,87 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: aidea
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO}
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MySQLDialect
+    show-sql: false
+    open-in-view: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope: read:user, user:email, repo, project
+
+  # 초대 이메일 관련 설정
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_EMAIL}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiry: 1800000
+  refresh-token-expiry: 1209600000
+
+server:
+  port: 8080
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+  thinking-budget: ${GEMINI_THINKING_BUDGET:0}
+
+frontend:
+  url: ${FRONTEND_URL}
+
+app:
+  cookie:
+    secure: ${COOKIE_SECURE}
+  
+  # 초대 이메일 관련 설정
+  base-url: ${APP_BASE_URL}
+  invitation:
+    expiry-hours: ${APP_INVITATION_EXPIRY_HOURS}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# 로그 레벨은 logback-spring.xml 의 springProfile 블록에서 관리합니다.

@@ -1,0 +1,19 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            redirect-uri: http://localhost:8080/login/oauth2/code/github
+
+frontend:
+  url: http://localhost:5173
+
+app:
+  cookie:
+    secure: false
+
+# 로그 레벨은 logback-spring.xml 의 springProfile name="dev" 블록에서 관리합니다.
