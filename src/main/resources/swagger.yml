@@ -32,7 +32,6 @@ tags:
   - name: Auth
     description: 인증 (소셜 로그인, 토큰 관리)
   - name: Teamspace
-
     description: 팀스페이스 생성, 조회, 관리
   - name: Member
     description: 멤버 조회, 초대, 추방, 초대 수락/취소
@@ -40,6 +39,8 @@ tags:
     description: 문서 CRUD 및 내보내기
   - name: Feedback
     description: AI 피드백 요청 및 수락
+  - name: Draft
+    description: 팀 스페이스 생성 시 문서 초안 생성
 
 components:
   securitySchemes:
@@ -268,6 +269,28 @@ components:
         status:
           type: string
           enum: [PENDING, DONE, ACCEPTED]
+
+    DraftResponse:
+      type: object
+      properties:
+        draftId:
+          type: string
+        documentId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, DONE, FAILED]
+        content:
+          type: string
+          nullable: true
+          description: "AI 생성 마크다운 (DONE 상태일 때만 값 있음)"
+        errorMessage:
+          type: string
+          nullable: true
+          description: "실패 사유 (FAILED 상태일 때만 값 있음)"
+        createdAt:
+          type: string
+          format: date-time
 
     ErrorResponse:
       type: object
@@ -1139,3 +1162,122 @@ paths:
                   documentId: "doc_001"
                   yjsBinary: "base64_encoded_after_snapshot..."
 
+  # ===== Draft =====
+  /api/documents/{docId}/draft:
+    post:
+      tags: [Draft]
+      summary: AI 초안 재생성 요청
+      description: |
+        문서 타입에 맞는 AI 초안을 비동기로 생성합니다.
+
+        **서버 동작:**
+        1. Document.status → DRAFT
+        2. drafts 테이블에 INSERT (status: PENDING)
+        3. 202 Accepted 응답 반환
+        4. 백그라운드에서 Gemini API 호출
+        5. 성공: draft.content 저장, Document.status → IDLE, WebSocket `draft:ready` 발행
+        6. 실패: draft.errorMessage 저장, Document.status → IDLE, WebSocket `draft:error` 발행
+
+        **WebSocket 이벤트:**
+        - `draft:ready` — `{ type, documentId, content }`
+        - `draft:error` — `{ type, documentId, errorMessage }`
+
+        **주의:** DRAFT 상태 중에는 AI 피드백 요청이 409로 거부됩니다.
+      parameters:
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: 초안 생성 요청 접수 (비동기 처리 중)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                success: true
+                code: "200"
+                message: "초안을 생성하고 있습니다."
+                data: null
+        '404':
+          description: 문서 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: "DOCUMENT_NOT_FOUND"
+                message: "문서를 찾을 수 없습니다."
+        '409':
+          description: 이미 초안 생성 중
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: "DRAFT_ALREADY_IN_PROGRESS"
+                message: "이미 초안 생성이 진행 중입니다."
+
+    get:
+      tags: [Draft]
+      summary: AI 초안 조회
+      description: |
+        문서의 AI 초안을 조회합니다. status가 PENDING이면 아직 생성 중입니다.
+        완료/실패 여부는 WebSocket 이벤트로도 수신할 수 있습니다.
+      parameters:
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 초안 조회 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DraftResponse'
+              examples:
+                done:
+                  summary: 생성 완료
+                  value:
+                    success: true
+                    message: "success"
+                    data:
+                      draftId: "d1a2b3c4"
+                      documentId: "doc_001"
+                      status: "DONE"
+                      content: "# 서비스 아이디어\n\n## 핵심 가치\n[TODO] ..."
+                      errorMessage: null
+                      createdAt: "2026-05-28T10:00:00"
+                failed:
+                  summary: 생성 실패
+                  value:
+                    success: true
+                    message: "success"
+                    data:
+                      draftId: "d1a2b3c4"
+                      documentId: "doc_001"
+                      status: "FAILED"
+                      content: null
+                      errorMessage: "초안 생성에 실패했습니다."
+                      createdAt: "2026-05-28T10:00:00"
+        '404':
+          description: 초안 없음 (아직 생성 요청 안 됨)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: "DRAFT_NOT_FOUND"
+                message: "초안을 찾을 수 없습니다."

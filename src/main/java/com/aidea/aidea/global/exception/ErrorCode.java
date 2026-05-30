@@ -37,7 +37,12 @@ public enum ErrorCode {
     // ===== AI 피드백 (Feedback) =====
     FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "FEEDBACK_NOT_FOUND", "피드백을 찾을 수 없습니다."),
     FEEDBACK_IN_PROGRESS(HttpStatus.CONFLICT, "FEEDBACK_IN_PROGRESS", "이미 진행 중인 피드백이 있습니다."),
-    FEEDBACK_INVALID_STATUS(HttpStatus.BAD_REQUEST, "FEEDBACK_INVALID_STATUS", "현재 상태에서는 해당 작업을 수행할 수 없습니다.");
+    FEEDBACK_INVALID_STATUS(HttpStatus.BAD_REQUEST, "FEEDBACK_INVALID_STATUS", "현재 상태에서는 해당 작업을 수행할 수 없습니다."),
+
+    // ===== 초안 (Draft) =====
+    DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."),
+    DRAFT_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_IN_PROGRESS", "초안 생성 중에는 피드백을 요청할 수 없습니다."),
+    DRAFT_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_ALREADY_IN_PROGRESS", "이미 초안 생성 중입니다.");
 
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)
     private final String code;            // 우리가 정한 에러 코드 문자열

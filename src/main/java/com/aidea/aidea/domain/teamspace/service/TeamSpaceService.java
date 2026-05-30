@@ -4,6 +4,7 @@ import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.draft.service.DraftService;
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
@@ -29,6 +30,7 @@ public class TeamSpaceService {
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
+    private final DraftService draftService;
 
     @Transactional
     public TeamSpaceCreateResponse create(TeamSpaceCreateRequest request, Long userId) {
@@ -60,6 +62,7 @@ public class TeamSpaceService {
                     .map(type -> Document.create(UUID.randomUUID().toString(), saved, type, type.name()))
                     .collect(Collectors.toList());
             documentRepository.saveAll(documents);
+            documents.forEach(doc -> draftService.triggerDraftGeneration(doc.getId()));
         }
 
         return TeamSpaceCreateResponse.builder()
