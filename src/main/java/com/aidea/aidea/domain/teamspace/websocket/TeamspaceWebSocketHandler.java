@@ -132,7 +132,7 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
         event.put("event", "teamspace:init");
         event.put("data", data);
 
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+        sendSafe(session, new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
     private void broadcastMemberUpdate(WebSocketSession exclude, String teamspaceId) {
@@ -152,14 +152,21 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
             for (WebSocketSession s : sessions) {
                 if (!s.isOpen()) continue;
                 if (exclude != null && s.getId().equals(exclude.getId())) continue;
-                try {
-                    s.sendMessage(message);
-                } catch (IOException e) {
-                    log.warn("[WS-TS] member:update send failed sessionId={}", s.getId());
-                }
+                sendSafe(s, message);
             }
         } catch (JsonProcessingException e) {
             log.error("[WS-TS] failed to serialize member:update teamspaceId={}", teamspaceId, e);
+        }
+    }
+
+    private void sendSafe(WebSocketSession session, TextMessage message) {
+        synchronized (session) {
+            if (!session.isOpen()) return;
+            try {
+                session.sendMessage(message);
+            } catch (IOException e) {
+                log.warn("[WS-TS] send failed sessionId={}", session.getId());
+            }
         }
     }
 
@@ -214,12 +221,7 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
             TextMessage message = new TextMessage(objectMapper.writeValueAsString(event));
 
             for (WebSocketSession s : sessions) {
-                if (!s.isOpen()) continue;
-                try {
-                    s.sendMessage(message);
-                } catch (IOException e) {
-                    log.warn("[WS-TS] teamspace:ready send failed sessionId={}", s.getId());
-                }
+                sendSafe(s, message);
             }
         } catch (JsonProcessingException e) {
             log.error("[WS-TS] failed to serialize teamspace:ready teamspaceId={}", teamspaceId, e);

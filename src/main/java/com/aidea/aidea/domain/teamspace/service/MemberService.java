@@ -92,11 +92,14 @@ public class MemberService {
             throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
         }
 
-        Invitation invitation = invitationRepository
-                .findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+        List<Invitation> invitations = invitationRepository
+                .findAllByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING);
 
-        invitationRepository.delete(invitation);
+        if (invitations.isEmpty()) {
+            throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
+        }
+
+        invitationRepository.deleteAll(invitations);
     }
 
     @Transactional

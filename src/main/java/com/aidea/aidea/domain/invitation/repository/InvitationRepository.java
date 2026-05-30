@@ -14,6 +14,9 @@ public interface InvitationRepository extends JpaRepository<Invitation, String> 
     Optional<Invitation> findByTeamspaceIdAndInviteeEmailAndStatus(
             String teamspaceId, String inviteeEmail, InvitationStatus status);
 
+    List<Invitation> findAllByTeamspaceIdAndInviteeEmailAndStatus(
+            String teamspaceId, String inviteeEmail, InvitationStatus status);
+
     Optional<Invitation> findByInviteeEmailAndResourceIdAndStatus(
             String inviteeEmail, Long resourceId, InvitationStatus status);
 
