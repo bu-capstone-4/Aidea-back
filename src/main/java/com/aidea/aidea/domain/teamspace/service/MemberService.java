@@ -64,6 +64,7 @@ public class MemberService {
                     .role(inv.getRole() != null ? inv.getRole().name() : MemberRole.MEMBER.name())
                     .status("PENDING")
                     .profileImageUrl(null)
+                    .invitationId(inv.getId())
                     .build());
         }
 

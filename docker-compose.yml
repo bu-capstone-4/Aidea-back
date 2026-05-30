@@ -38,6 +38,9 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
+      SMTP_EMAIL: ${SMTP_EMAIL}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      APP_INVITATION_EXPIRY_HOURS: ${APP_INVITATION_EXPIRY_HOURS}
     depends_on:
       mysql:
         condition: service_healthy
@@ -59,6 +62,9 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
+      SMTP_EMAIL: ${SMTP_EMAIL}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      APP_INVITATION_EXPIRY_HOURS: ${APP_INVITATION_EXPIRY_HOURS}
     depends_on:
       mysql:
         condition: service_healthy
