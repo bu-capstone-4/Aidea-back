@@ -57,14 +57,12 @@ public class InvitationController {
         }
 
         try {
-            String teamspaceId = invitationService.acceptInvitation(token, Long.parseLong(userId));
-            return new RedirectView(frontendUrl + "/teamspaces/" + teamspaceId);
+            String docId = invitationService.acceptInvitation(token, Long.parseLong(userId));
+            String target = (docId != null) ? "/main/" + docId : "/";
+            return new RedirectView(frontendUrl + target);
         } catch (CustomException e) {
             if (e.getErrorCode() == ErrorCode.ALREADY_MEMBER) {
-                String teamspaceId = invitationService.getTeamspaceIdByToken(token);
-                if (teamspaceId != null) {
-                    return new RedirectView(frontendUrl + "/teamspaces/" + teamspaceId);
-                }
+                return new RedirectView(frontendUrl + "/");
             }
             return new RedirectView(frontendUrl + "/?error=" + e.getErrorCode().getCode());
         }
