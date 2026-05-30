@@ -72,6 +72,34 @@ public class MemberService {
     }
 
     @Transactional
+    public String removeMemberOrCancelInvitation(String teamspaceId, String memberIdOrEmail, Long userId) {
+        try {
+            Long memberId = Long.parseLong(memberIdOrEmail);
+            removeMember(teamspaceId, memberId, userId);
+            return "멤버가 추방되었습니다.";
+        } catch (NumberFormatException e) {
+            // 숫자가 아니면 이메일로 간주 → 초대 취소
+            cancelInvitationByEmail(teamspaceId, memberIdOrEmail, userId);
+            return "초대가 취소되었습니다.";
+        }
+    }
+
+    @Transactional
+    public void cancelInvitationByEmail(String teamspaceId, String email, Long userId) {
+        TeamspaceMember caller = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
+        if (caller.getRole() != MemberRole.OWNER) {
+            throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
+        }
+
+        Invitation invitation = invitationRepository
+                .findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVITATION_NOT_FOUND));
+
+        invitationRepository.delete(invitation);
+    }
+
+    @Transactional
     public void removeMember(String teamspaceId, Long memberId, Long userId) {
         // 호출자 OWNER 확인
         TeamspaceMember caller = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, userId)

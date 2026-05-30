@@ -100,10 +100,10 @@ public class InvitationController {
     @DeleteMapping("/api/teamspaces/{teamspaceId}/members/{memberId}")
     public GlobalResponse<Void> removeMember(
             @PathVariable String teamspaceId,
-            @PathVariable Long memberId,
+            @PathVariable String memberId,
             @AuthenticationPrincipal String userId) {
-        memberService.removeMember(teamspaceId, memberId, Long.parseLong(userId));
-        return GlobalResponse.ok("멤버가 추방되었습니다.");
+        String message = memberService.removeMemberOrCancelInvitation(teamspaceId, memberId, Long.parseLong(userId));
+        return GlobalResponse.ok(message);
     }
 
     @DeleteMapping("/api/teamspaces/{teamspaceId}/invitations/{invitationId}")
