@@ -2,6 +2,7 @@ package com.aidea.aidea.global.security.oauth2;
 
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
+import com.aidea.aidea.domain.invitation.service.InvitationService;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
 import com.aidea.aidea.global.security.jwt.JwtTokenProvider;
@@ -28,6 +29,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
     private final CookieUtils cookieUtils;
+    private final InvitationService invitationService;
 
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -68,6 +70,21 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createRefreshTokenCookie(refreshToken).toString());
 
             log.info("[AUTH] oauth2 login userId={} provider={}", userId, provider);
+
+            // 초대 링크로 진입한 경우 자동 수락 처리
+            String pendingInviteToken = cookieUtils.extractCookieValue(request, "pending_invite_token").orElse(null);
+            if (pendingInviteToken != null) {
+                response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("pending_invite_token").toString());
+                try {
+                    String docId = invitationService.acceptInvitation(pendingInviteToken, userId);
+                    String target = (docId != null) ? "/main/" + docId : "/";
+                    getRedirectStrategy().sendRedirect(request, response, frontendUrl + target);
+                    return;
+                } catch (Exception ex) {
+                    log.warn("[AUTH] 초대 자동 수락 실패 token={} reason={}", pendingInviteToken, ex.getMessage());
+                }
+            }
+
             getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/");
         } catch (Exception e) {
             log.error("[AUTH] oauth2 login failed reason={}", e.getMessage(), e);

@@ -1,8 +1,10 @@
 package com.aidea.aidea.domain.invitation.controller;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,6 +27,7 @@ import com.aidea.aidea.domain.invitation.service.InvitationService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.service.MemberService;
 import com.aidea.aidea.global.dto.GlobalResponse;
+import com.aidea.aidea.global.util.CookieUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,7 @@ public class InvitationController {
 
     private final InvitationService invitationService;
     private final MemberService memberService;
+    private final CookieUtils cookieUtils;
 
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -50,10 +54,12 @@ public class InvitationController {
     // 이메일 링크 클릭 시 브라우저로 직접 접근 (GET)
     @GetMapping("/api/invitations/accept")
     public RedirectView acceptByLink(@RequestParam String token,
-                                     @AuthenticationPrincipal String userId) {
-        // 비로그인 상태 - 프론트로 토큰 전달 후 로그인 유도
+                                     @AuthenticationPrincipal String userId,
+                                     HttpServletResponse response) {
+        // 비로그인 상태 - 초대 토큰을 쿠키에 저장하고 GitHub OAuth 로그인으로 리다이렉트
         if (userId == null || "anonymousUser".equals(userId)) {
-            return new RedirectView(frontendUrl + "/invite?token=" + token);
+            response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createPendingInviteCookie(token).toString());
+            return new RedirectView("/oauth2/authorization/github");
         }
 
         try {
@@ -72,8 +78,8 @@ public class InvitationController {
     @PostMapping("/api/invitations/accept")
     public GlobalResponse<Map<String, String>> accept(@Valid @RequestBody AcceptInvitationRequest request,
                                                       @AuthenticationPrincipal String userId) {
-        String teamspaceId = invitationService.acceptInvitation(request.getToken(), Long.parseLong(userId));
-        return GlobalResponse.ok("팀스페이스에 참여하였습니다.", Map.of("teamspaceId", teamspaceId));
+        String docId = invitationService.acceptInvitation(request.getToken(), Long.parseLong(userId));
+        return GlobalResponse.ok("팀스페이스에 참여하였습니다.", Map.of("docId", docId != null ? docId : ""));
     }
 
     @PostMapping("/api/teamspaces/{teamspaceId}/members/invite")
