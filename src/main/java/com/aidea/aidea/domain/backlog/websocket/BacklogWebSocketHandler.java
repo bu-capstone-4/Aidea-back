@@ -5,7 +5,6 @@ import com.aidea.aidea.domain.backlog.dto.response.BacklogConfigResponse;
 import com.aidea.aidea.domain.backlog.dto.response.BacklogTaskResponse;
 import com.aidea.aidea.domain.backlog.dto.response.EpicResponse;
 import com.aidea.aidea.domain.backlog.dto.response.StorySummaryResponse;
-import com.aidea.aidea.domain.backlog.entity.Task;
 import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.backlog.repository.EpicRepository;
 import com.aidea.aidea.domain.backlog.repository.StoryRepository;
