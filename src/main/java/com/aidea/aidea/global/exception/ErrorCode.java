@@ -39,6 +39,13 @@ public enum ErrorCode {
     FEEDBACK_IN_PROGRESS(HttpStatus.CONFLICT, "FEEDBACK_IN_PROGRESS", "이미 진행 중인 피드백이 있습니다."),
     FEEDBACK_INVALID_STATUS(HttpStatus.BAD_REQUEST, "FEEDBACK_INVALID_STATUS", "현재 상태에서는 해당 작업을 수행할 수 없습니다."),
 
+    // ===== 백로그 (Backlog) =====
+    EPIC_NOT_FOUND(HttpStatus.NOT_FOUND, "EPIC_NOT_FOUND", "에픽을 찾을 수 없습니다."),
+    STORY_NOT_FOUND(HttpStatus.NOT_FOUND, "STORY_NOT_FOUND", "스토리를 찾을 수 없습니다."),
+    TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "태스크를 찾을 수 없습니다."),
+    BACKLOG_TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "BACKLOG_TASK_NOT_FOUND", "최상위 태스크를 찾을 수 없습니다."),
+    BACKLOG_CONFIG_FIELD_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "BACKLOG_CONFIG_FIELD_NOT_ALLOWED", "백로그 설정에서 비활성화된 필드입니다."),
+    
     // ===== 초안 (Draft) =====
     DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."),
     DRAFT_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_IN_PROGRESS", "초안 생성 중에는 피드백을 요청할 수 없습니다."),
