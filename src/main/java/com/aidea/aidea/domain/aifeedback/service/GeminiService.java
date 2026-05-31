@@ -22,7 +22,6 @@ import java.time.Duration;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 
 @Service
@@ -63,7 +62,8 @@ public class GeminiService {
         try {
             String prompt = buildInitialPrompt(
                     feedback.getOriginalMarkdown(),
-                    feedback.getAdditionalRequest()
+                    feedback.getAdditionalRequest(),
+                    feedback.getIdeaMarkdown()
             );
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
@@ -96,7 +96,8 @@ public class GeminiService {
                     feedback.getOriginalMarkdown(),
                     feedback.getQuestions(),
                     feedback.getAnswers(),
-                    feedback.getAdditionalRequest()
+                    feedback.getAdditionalRequest(),
+                    feedback.getIdeaMarkdown()
             );
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
@@ -250,7 +251,10 @@ public class GeminiService {
     }
 
     //Gemini에게 줄 첫 명령서 작성
-    private String buildInitialPrompt(String originalMarkdown, String additionalRequest) {
+    private String buildInitialPrompt(String originalMarkdown, String additionalRequest, String ideaMarkdown) {
+        String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
+                ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
+                : "";
         return """
             [ROLE]
             너는 IT 기획 문서 검토 전문 컨설턴트야.
@@ -260,7 +264,7 @@ public class GeminiService {
             - 문서가 충분히 구체적이면 → 수정안을 작성
             - 문서가 너무 빈약하면 → 핵심 정보를 묻는 질문 생성
 
-            [DOCUMENT]
+            %s[DOCUMENT]
             %s
 
             [ADDITIONAL REQUEST]
@@ -268,18 +272,20 @@ public class GeminiService {
 
             [INSTRUCTION]
             1. 문서의 정보량과 구체성을 판단해.
-            2. 빈약 판단 기준:
+            2. [IDEA DOCUMENT]가 있으면 해당 아이디어의 방향성과 맥락을 참고해서 검토해.
+            3. 빈약 판단 기준:
                - 핵심 기능, 타깃 사용자, 차별점 중 2개 이상이 한 줄 미만이거나 없음
                - 또는 전체 문서가 200자 미만
-            3. 충분 판단이면 type="FEEDBACK", revisedMarkdown에 개선된 마크다운 작성
+            4. 충분 판단이면 type="FEEDBACK", revisedMarkdown에 개선된 마크다운 작성
                (원본 구조 유지, 부족한 섹션 보강, 모호한 표현 명확화)
-            4. 빈약 판단이면 type="QUESTIONS", questions에 핵심 정보를 묻는 질문 3~5개 생성
+            5. 빈약 판단이면 type="QUESTIONS", questions에 핵심 정보를 묻는 질문 3~5개 생성
                각 질문은 id(q1, q2 ...), section(어느 섹션인지), text(질문 내용),
                options(객관식 선택지, 가능하면) 포함
 
             [OUTPUT]
             반드시 JSON 형식. 다른 형식 절대 안 됨.
             """.formatted(
+                ideaSection,
                 originalMarkdown,
                 additionalRequest != null ? additionalRequest : "없음"
         );
@@ -290,8 +296,13 @@ public class GeminiService {
             String originalMarkdown,
             List<Question> questions,
             List<Answer> answers,
-            String additionalRequest
+            String additionalRequest,
+            String ideaMarkdown
     ) {
+        String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
+                ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
+                : "";
+
         StringBuilder qa = new StringBuilder();
         for (Question q : questions) {
             String matchedAnswer = answers.stream()
@@ -311,7 +322,7 @@ public class GeminiService {
             이전에 사용자에게 핵심 정보를 묻는 질문을 했고, 답변을 받았어.
             이제 원본 + 답변을 합쳐서 수정안을 작성해.
 
-            [ORIGINAL DOCUMENT]
+            %s[ORIGINAL DOCUMENT]
             %s
 
             [QUESTIONS AND ANSWERS]
@@ -321,6 +332,7 @@ public class GeminiService {
             %s
 
             [INSTRUCTION]
+            - [IDEA DOCUMENT]가 있으면 아이디어의 방향성을 참고해서 수정안 작성
             - 답변 정보를 원본에 자연스럽게 녹여서 수정안 작성
             - 사용자가 답하지 않은 영역은 추측하지 말고 기존 내용 유지
             - type="FEEDBACK"으로 응답, revisedMarkdown에 마크다운
@@ -328,6 +340,7 @@ public class GeminiService {
             [OUTPUT]
             반드시 JSON 형식.
             """.formatted(
+                ideaSection,
                 originalMarkdown,
                 qa.toString(),
                 additionalRequest != null ? additionalRequest : "없음"
