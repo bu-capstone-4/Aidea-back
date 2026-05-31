@@ -28,6 +28,9 @@ public class Document {
     @Column(nullable = false)
     private DocumentType type;
 
+    @Enumerated(EnumType.STRING)
+    private DocumentAiStatus status;
+
     @Column(nullable = false)
     private String title;
 

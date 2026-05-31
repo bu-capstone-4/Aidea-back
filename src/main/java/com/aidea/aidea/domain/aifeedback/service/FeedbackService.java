@@ -12,6 +12,7 @@ import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.entity.DocumentType;
+import com.aidea.aidea.domain.documents.entity.DocumentAiStatus;
 import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
@@ -61,6 +62,10 @@ public class FeedbackService {
                 .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
 
         roleValidator.requireRole(document.getTeamspace().getTeamspaceId(), userId, MemberRole.OWNER, MemberRole.MEMBER);
+
+        if (document.getStatus() == DocumentAiStatus.DRAFT) {
+            throw new CustomException(ErrorCode.DRAFT_IN_PROGRESS);
+        }
 
         boolean inProgress = feedbackRepository.existsByDocumentIdAndStatusIn(docId, IN_PROGRESS_STATUSES);
         if (inProgress) {

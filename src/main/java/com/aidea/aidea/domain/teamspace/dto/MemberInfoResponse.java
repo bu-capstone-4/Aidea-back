@@ -12,4 +12,5 @@ public class MemberInfoResponse {
     private String role;
     private String status;
     private String profileImageUrl;
+    private String invitationId;
 }
