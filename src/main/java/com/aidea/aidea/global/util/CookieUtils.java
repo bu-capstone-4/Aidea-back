@@ -40,6 +40,10 @@ public class CookieUtils {
         return buildCookie(name, "", 0);
     }
 
+    public ResponseCookie createPendingInviteCookie(String token) {
+        return buildCookie("pending_invite_token", token, 600); // 10분
+    }
+
     public Optional<String> extractCookieValue(HttpServletRequest request, String name) {
         if (request.getCookies() == null) return Optional.empty();
         return Arrays.stream(request.getCookies())

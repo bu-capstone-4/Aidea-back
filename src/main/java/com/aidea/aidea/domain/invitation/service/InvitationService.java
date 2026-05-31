@@ -2,6 +2,7 @@ package com.aidea.aidea.domain.invitation.service;
 
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
+import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteResultItem;
 import com.aidea.aidea.domain.invitation.entity.Invitation;
 import com.aidea.aidea.domain.invitation.entity.InvitationStatus;
@@ -33,6 +34,7 @@ public class InvitationService {
     private final TeamSpaceRepository teamSpaceRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final UserRepository userRepository;
+    private final DocumentRepository documentRepository;
 
     @Value("${app.base-url}")
     private String backendUrl;
@@ -112,7 +114,9 @@ public class InvitationService {
                 .role(roleToAssign)
                 .build());
 
-        return invitation.getTeamspaceId();
+        List<com.aidea.aidea.domain.documents.entity.Document> docs =
+                documentRepository.findByTeamspaceId(invitation.getTeamspaceId());
+        return docs.isEmpty() ? null : docs.get(0).getId();
     }
 
     @Transactional(readOnly = true)
