@@ -15,5 +15,6 @@ frontend:
 app:
   cookie:
     secure: true
+  base-url: https://aidea-bu.duckdns.org
 
 # 로그 레벨은 logback-spring.xml 의 springProfile name="prod" 블록에서 관리합니다.

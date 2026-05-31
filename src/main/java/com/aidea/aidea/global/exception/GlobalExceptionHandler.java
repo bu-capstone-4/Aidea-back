@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.aidea.aidea.global.dto.GlobalResponse;
 
@@ -30,6 +31,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(GlobalResponse.error(errorCode.getCode(), errorCode.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<GlobalResponse<?>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity
+                .badRequest()
+                .body(GlobalResponse.error(ErrorCode.INVALID_INPUT.getCode(), "잘못된 요청 파라미터입니다."));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
