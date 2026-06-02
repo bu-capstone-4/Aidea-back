@@ -2,7 +2,6 @@ package com.aidea.aidea.domain.draft.service;
 
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.entity.DocumentAiStatus;
-import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.draft.entity.Draft;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
@@ -38,7 +37,6 @@ import java.util.Map;
 public class DraftAsyncExecutor {
 
     private final DraftRepository draftRepository;
-    private final DocumentRepository documentRepository;
     private final TeamspaceEventPublisher teamspaceEventPublisher;
     private final DraftEventPublisher draftEventPublisher;
     private final ObjectMapper objectMapper;
@@ -77,9 +75,8 @@ public class DraftAsyncExecutor {
             draft.setStatus(DraftStatus.DONE);
             document.setStatus(DocumentAiStatus.IDLE);
 
-            log.warn("[DRAFT] publishing draft:ready draftId={} teamspaceId={} activeSessions=?", draftId, teamspaceId);
             teamspaceEventPublisher.publishDraftReady(teamspaceId, document.getId(), draft.getId(), content);
-            publishDraftReadyToDocument(document.getId(), draft.getId(), content);
+            publishDraftAppliedToDocument(document.getId(), draft.getId(), content);
             log.warn("[DRAFT] generation complete draftId={}", draftId);
 
             if (document.getType() == com.aidea.aidea.domain.documents.entity.DocumentType.IDEA) {
@@ -127,7 +124,7 @@ public class DraftAsyncExecutor {
             document.setStatus(DocumentAiStatus.IDLE);
 
             teamspaceEventPublisher.publishDraftReady(teamspaceId, document.getId(), draft.getId(), content);
-            publishDraftReadyToDocument(document.getId(), draft.getId(), content);
+            publishDraftAppliedToDocument(document.getId(), draft.getId(), content);
             log.warn("[DRAFT] pending draft complete draftId={}", draftId);
 
         } catch (Exception e) {
@@ -200,16 +197,16 @@ public class DraftAsyncExecutor {
         return trimmed;
     }
 
-    private void publishDraftReadyToDocument(String documentId, String draftId, String content) {
+    private void publishDraftAppliedToDocument(String documentId, String draftId, String content) {
         try {
             Map<String, Object> event = new java.util.LinkedHashMap<>();
-            event.put("type", "draft:ready");
+            event.put("type", "draft:applied");
             event.put("draftId", draftId);
             event.put("content", content);
             draftEventPublisher.publishDraftToDocument(documentId, objectMapper.writeValueAsString(event));
-            log.warn("[DRAFT] published draft:ready to document WS documentId={} draftId={}", documentId, draftId);
+            log.warn("[DRAFT] published draft:applied docId={} draftId={}", documentId, draftId);
         } catch (Exception e) {
-            log.error("[DRAFT] failed to publish draft:ready to document WS documentId={}", documentId, e);
+            log.error("[DRAFT] failed to publish draft:applied docId={}", documentId, e);
         }
     }
 
