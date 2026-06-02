@@ -7,6 +7,7 @@ import com.aidea.aidea.domain.draft.entity.Draft;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
+import com.aidea.aidea.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
@@ -65,7 +68,8 @@ public class DraftAsyncExecutor {
         Document document = draft.getDocument();
 
         try {
-            log.warn("[DRAFT] calling Gemini draftId={} docType={}", draftId, document.getType());
+            log.warn("[DRAFT] calling Gemini draftId={} docType={} apiKeyPrefix={}", draftId, document.getType(),
+                apiKey != null && apiKey.length() > 8 ? apiKey.substring(0, 8) + "..." : "(empty)");
             String prompt = buildPrompt(document.getType(), draft.getIdeaContext(), teamspaceName);
             String content = callGeminiApi(prompt);
 
@@ -90,24 +94,7 @@ public class DraftAsyncExecutor {
             }
 
         } catch (Exception e) {
-            log.error("[DRAFT] generation failed draftId={}", draftId, e);
-
-            String errorCode = "DRAFT_GENERATION_FAILED";
-            if (e instanceof HttpClientErrorException httpEx
-                    && httpEx.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-                errorCode = "QUOTA_EXCEEDED";
-            }
-
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.length() > 500) {
-                errorMsg = errorMsg.substring(0, 500);
-            }
-            draft.setErrorMessage(errorMsg);
-            draft.setStatus(DraftStatus.FAILED);
-            document.setStatus(DocumentAiStatus.IDLE);
-
-            log.warn("[DRAFT] publishing draft:error draftId={} teamspaceId={} errorCode={}", draftId, teamspaceId, errorCode);
-            teamspaceEventPublisher.publishDraftError(teamspaceId, document.getId(), errorCode);
+            handleDraftFailure(draft, document, teamspaceId, e);
         }
     }
 
@@ -144,23 +131,58 @@ public class DraftAsyncExecutor {
             log.warn("[DRAFT] pending draft complete draftId={}", draftId);
 
         } catch (Exception e) {
-            log.error("[DRAFT] pending draft failed draftId={}", draftId, e);
+            handleDraftFailure(draft, document, teamspaceId, e);
+        }
+    }
 
-            String errorCode = "DRAFT_GENERATION_FAILED";
-            if (e instanceof HttpClientErrorException httpEx
-                    && httpEx.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-                errorCode = "QUOTA_EXCEEDED";
+    private void handleDraftFailure(Draft draft, Document document, String teamspaceId, Exception e) {
+        ErrorCode errorCode = classifyException(e);
+        log.error("[DRAFT] generation failed draftId={} errorCode={}", draft.getId(), errorCode.getCode(), e);
+
+        String errorMsg = e.getMessage();
+        if (errorMsg != null && errorMsg.length() > 500) {
+            errorMsg = errorMsg.substring(0, 500);
+        }
+        draft.setErrorMessage(errorMsg);
+        draft.setErrorCode(errorCode.getCode());
+        draft.setStatus(DraftStatus.FAILED);
+        document.setStatus(DocumentAiStatus.IDLE);
+
+        log.warn("[DRAFT] publishing draft:error draftId={} teamspaceId={} errorCode={}", draft.getId(), teamspaceId, errorCode.getCode());
+        teamspaceEventPublisher.publishDraftError(teamspaceId, document.getId(), errorCode.getCode());
+        publishDraftErrorToDocument(document.getId(), errorCode.getCode());
+    }
+
+    private ErrorCode classifyException(Exception e) {
+        if (e instanceof HttpClientErrorException httpEx) {
+            if (httpEx.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                return ErrorCode.DRAFT_QUOTA_EXCEEDED;
             }
+            return ErrorCode.DRAFT_GEMINI_API_ERROR;
+        }
+        if (e instanceof HttpServerErrorException || e instanceof RestClientException) {
+            return ErrorCode.DRAFT_GEMINI_API_ERROR;
+        }
+        if (e instanceof GeminiInvalidResponseException) {
+            return ErrorCode.DRAFT_GEMINI_INVALID_RESPONSE;
+        }
+        return ErrorCode.DRAFT_GENERATION_FAILED;
+    }
 
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.length() > 500) {
-                errorMsg = errorMsg.substring(0, 500);
-            }
-            draft.setErrorMessage(errorMsg);
-            draft.setStatus(DraftStatus.FAILED);
-            document.setStatus(DocumentAiStatus.IDLE);
+    private void publishDraftErrorToDocument(String documentId, String errorCode) {
+        try {
+            Map<String, Object> event = new java.util.LinkedHashMap<>();
+            event.put("type", "draft:error");
+            event.put("errorCode", errorCode);
+            draftEventPublisher.publishDraftToDocument(documentId, objectMapper.writeValueAsString(event));
+        } catch (Exception e) {
+            log.error("[DRAFT] failed to publish draft:error to document WS documentId={}", documentId, e);
+        }
+    }
 
-            teamspaceEventPublisher.publishDraftError(teamspaceId, document.getId(), errorCode);
+    static class GeminiInvalidResponseException extends RuntimeException {
+        GeminiInvalidResponseException(String message) {
+            super(message);
         }
     }
 
@@ -228,10 +250,11 @@ public class DraftAsyncExecutor {
                 )
         );
 
-        String url = geminiBaseUrl + "/models/" + geminiModel + ":generateContent?key=" + apiKey;
+        String url = geminiBaseUrl + "/models/" + geminiModel + ":generateContent";
 
         Map response = restClient.post()
                 .uri(url)
+                .header("x-goog-api-key", apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(requestBody)
                 .retrieve()
@@ -239,21 +262,21 @@ public class DraftAsyncExecutor {
 
         List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
         if (candidates == null || candidates.isEmpty()) {
-            throw new IllegalStateException("Gemini 빈 응답");
+            throw new GeminiInvalidResponseException("Gemini 빈 응답");
         }
 
         Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-        if (content == null) throw new IllegalStateException("Gemini content 필드 없음");
+        if (content == null) throw new GeminiInvalidResponseException("Gemini content 필드 없음");
 
         List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-        if (parts == null || parts.isEmpty()) throw new IllegalStateException("Gemini parts 필드 없음");
+        if (parts == null || parts.isEmpty()) throw new GeminiInvalidResponseException("Gemini parts 필드 없음");
 
         String raw = parts.stream()
                 .filter(p -> !Boolean.TRUE.equals(p.get("thought")))
                 .map(p -> (String) p.get("text"))
                 .filter(t -> t != null && !t.isBlank())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Gemini text 파트 없음"));
+                .orElseThrow(() -> new GeminiInvalidResponseException("Gemini text 파트 없음"));
 
         return stripMarkdownFence(raw);
     }

@@ -31,8 +31,12 @@ public class Draft {
     private String content; //Ai 생성 마크다운 (성공 시)
 
     @Setter
-    @Column(name = "error_message")
-    private String errorMessage; //실패 시 사유
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Setter
+    @Column(name = "error_code")
+    private String errorCode;
 
     @Column(name = "idea_context", columnDefinition = "MEDIUMTEXT")
     private String ideaContext;
