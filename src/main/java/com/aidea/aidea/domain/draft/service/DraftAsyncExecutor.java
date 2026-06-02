@@ -239,7 +239,26 @@ public class DraftAsyncExecutor {
             """.formatted(typeInstruction, projectSection, ideaSection);
     }
 
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 3_000L;
+
     private String callGeminiApi(String prompt) throws Exception {
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return executeGeminiRequest(prompt);
+            } catch (HttpServerErrorException e) {
+                if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE && attempt < MAX_RETRIES) {
+                    log.warn("[DRAFT] Gemini 503 재시도 ({}/{}) {}ms 후...", attempt + 1, MAX_RETRIES, RETRY_DELAY_MS);
+                    Thread.sleep(RETRY_DELAY_MS);
+                } else {
+                    throw e;
+                }
+            }
+        }
+        throw new IllegalStateException("unreachable");
+    }
+
+    private String executeGeminiRequest(String prompt) throws Exception {
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
                 "generationConfig", Map.of(
