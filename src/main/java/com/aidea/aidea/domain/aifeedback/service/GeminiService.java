@@ -176,7 +176,8 @@ public class GeminiService {
         log.info("[Gemini] API 호출 시작 url={}", url);
 
         Map response = restClient.post()
-                .uri(url + "?key=" + apiKey)
+                .uri(url)
+                .header("x-goog-api-key", apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(requestBody)
                 .retrieve()
