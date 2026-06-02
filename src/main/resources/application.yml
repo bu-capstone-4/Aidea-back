@@ -15,13 +15,19 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO}
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: false
         dialect: org.hibernate.dialect.MySQLDialect
     show-sql: false
     open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
   security:
     oauth2:

@@ -5,6 +5,7 @@ import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
+import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -26,7 +27,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
+public class TeamspaceWebSocketHandler extends TextWebSocketHandler
+        implements TeamspaceEventPublisher {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> teamspaceSessions
             = new ConcurrentHashMap<>();
@@ -115,12 +117,14 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
 
     private void sendTeamspaceInit(WebSocketSession session, String teamspaceId) throws Exception {
         TeamSpace teamSpace = teamSpaceRepository.findById(teamspaceId).orElse(null);
-        if (teamSpace == null) return;
+        if (teamSpace == null) {
+            log.warn("[WS-TS] sendTeamspaceInit skipped - teamspace not found teamspaceId={} sessionId={}", teamspaceId, session.getId());
+            return;
+        }
 
         Map<String, Object> teamspaceData = new LinkedHashMap<>();
         teamspaceData.put("id", teamSpace.getTeamspaceId());
         teamspaceData.put("name", teamSpace.getName());
-        teamspaceData.put("status", teamSpace.getStatus().name());
 
         List<Map<String, Object>> onlineMembers = buildOnlineMembers(teamspaceId);
 
@@ -132,6 +136,7 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
         event.put("event", "teamspace:init");
         event.put("data", data);
 
+        log.warn("[WS-TS] sending teamspace:init sessionId={} teamspaceId={} onlineMemberCount={}", session.getId(), teamspaceId, onlineMembers.size());
         sendSafe(session, new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
@@ -159,6 +164,44 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    @Override
+    public void publishDraftReady(String teamspaceId, String documentId, String draftId, String content) {
+        log.warn("[WS-TS] publishDraftReady teamspaceId={} documentId={} draftId={}", teamspaceId, documentId, draftId);
+        Map<String, Object> data = Map.of(
+                "documentId", documentId,
+                "draftId", draftId,
+                "content", content
+        );
+        publishEvent(teamspaceId, "draft:ready", data);
+    }
+
+    @Override
+    public void publishDraftError(String teamspaceId, String documentId, String errorCode) {
+        log.warn("[WS-TS] publishDraftError teamspaceId={} documentId={} errorCode={}", teamspaceId, documentId, errorCode);
+        publishEvent(teamspaceId, "draft:error", Map.of("documentId", documentId, "errorCode", errorCode));
+    }
+
+    private void publishEvent(String teamspaceId, String eventType, Map<String, Object> data) {
+        Set<WebSocketSession> sessions = teamspaceSessions.getOrDefault(teamspaceId, Collections.emptySet());
+        if (sessions.isEmpty()) {
+            log.warn("[WS-TS] publishEvent no active sessions event={} teamspaceId={}", eventType, teamspaceId);
+            return;
+        }
+        log.warn("[WS-TS] publishEvent event={} teamspaceId={} sessionCount={}", eventType, teamspaceId, sessions.size());
+
+        try {
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("event", eventType);
+            event.put("data", data);
+            TextMessage message = new TextMessage(objectMapper.writeValueAsString(event));
+            for (WebSocketSession s : sessions) {
+                sendSafe(s, message);
+            }
+        } catch (JsonProcessingException e) {
+            log.error("[WS-TS] failed to serialize {} teamspaceId={}", eventType, teamspaceId, e);
+        }
+    }
+
     private void sendSafe(WebSocketSession session, TextMessage message) {
         synchronized (session) {
             if (!session.isOpen()) return;
@@ -182,7 +225,6 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
         Map<Long, User> userMap = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // 한 유저가 여러 세션일 경우 첫 번째 세션 기준
         Map<Long, WebSocketSession> firstSessionByUser = new LinkedHashMap<>();
         for (WebSocketSession s : sessions) {
             if (!s.isOpen()) continue;
@@ -206,25 +248,5 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler {
             result.add(member);
         }
         return result;
-    }
-
-    public void publishTeamspaceReady(String teamspaceId) {
-        Set<WebSocketSession> sessions = teamspaceSessions.getOrDefault(teamspaceId, Collections.emptySet());
-        if (sessions.isEmpty()) return;
-
-        try {
-            Map<String, Object> data = Map.of("status", "CREATED");
-            Map<String, Object> event = new LinkedHashMap<>();
-            event.put("event", "teamspace:ready");
-            event.put("data", data);
-
-            TextMessage message = new TextMessage(objectMapper.writeValueAsString(event));
-
-            for (WebSocketSession s : sessions) {
-                sendSafe(s, message);
-            }
-        } catch (JsonProcessingException e) {
-            log.error("[WS-TS] failed to serialize teamspace:ready teamspaceId={}", teamspaceId, e);
-        }
     }
 }

@@ -31,10 +31,6 @@ public class TeamSpace {
     @Column(name = "name", nullable = false, length = 50)
     private String name;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private TeamSpaceStatus status;
-
     @OneToMany(mappedBy = "teamspace")
     @Builder.Default
     private List<Document> documents = new ArrayList<>();

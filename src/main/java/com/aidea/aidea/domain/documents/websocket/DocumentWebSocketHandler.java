@@ -3,6 +3,7 @@ package com.aidea.aidea.domain.documents.websocket;
 import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
 import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
+import com.aidea.aidea.domain.draft.service.DraftEventPublisher;
 import com.aidea.aidea.domain.documents.dto.ActiveDraftInfo;
 import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
@@ -34,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher {
+public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher, DraftEventPublisher {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
@@ -219,6 +220,21 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
                     s.sendMessage(message);
                 } catch (IOException e) {
                     log.warn("[WS] publishToDocument failed sessionId={} docId={}", s.getId(), documentId);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void publishDraftToDocument(String documentId, String jsonEvent) {
+        TextMessage message = new TextMessage(jsonEvent);
+        Set<WebSocketSession> sessions = docSessions.getOrDefault(documentId, Collections.emptySet());
+        for (WebSocketSession s : sessions) {
+            if (s.isOpen()) {
+                try {
+                    s.sendMessage(message);
+                } catch (IOException e) {
+                    log.warn("[WS] publishDraftToDocument failed sessionId={} docId={}", s.getId(), documentId);
                 }
             }
         }

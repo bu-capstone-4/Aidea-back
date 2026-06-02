@@ -34,14 +34,18 @@ public class Draft {
     @Column(name = "error_message")
     private String errorMessage; //실패 시 사유
 
+    @Column(name = "idea_context", columnDefinition = "MEDIUMTEXT")
+    private String ideaContext;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    public static Draft create(String id, Document document) {
+    public static Draft create(String id, Document document, String ideaContext) {
         Draft draft = new Draft();
         draft.id = id;
         draft.document = document;
         draft.status = DraftStatus.PENDING;
+        draft.ideaContext = ideaContext;
         draft.createdAt = LocalDateTime.now();
         return draft;
     }

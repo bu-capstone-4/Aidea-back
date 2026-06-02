@@ -15,7 +15,6 @@ public class TeamSpaceDetailResponse {
 
     private String teamspaceId; // 팀스페이스 ID
     private String name; // 이름
-    private String status; // 상태
     private LocalDateTime createdAt; // 생성일시
 
     private List<DocumentSummary> documents; // 문서 요약 리스트
@@ -32,6 +31,7 @@ public class TeamSpaceDetailResponse {
         private String id; // 문서 ID
         private String type; // 문서 타입 (IDEA, PLAN ...)
         private String title; // 제목
+        private String aiStatus; // IDLE | DRAFT | FEEDBACK_IN_PROGRESS
         private LocalDateTime updatedAt; // 수정일
         private String updatedBy; // 수정자
     }
