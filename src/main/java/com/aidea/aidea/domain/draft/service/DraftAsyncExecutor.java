@@ -246,16 +246,30 @@ public class DraftAsyncExecutor {
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
                 return executeGeminiRequest(prompt);
-            } catch (HttpServerErrorException e) {
-                if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE && attempt < MAX_RETRIES) {
-                    log.warn("[DRAFT] Gemini 503 재시도 ({}/{}) {}ms 후...", attempt + 1, MAX_RETRIES, RETRY_DELAY_MS);
-                    Thread.sleep(RETRY_DELAY_MS);
+            } catch (HttpClientErrorException e) {
+                throw e; // 4xx는 재시도 불가
+            } catch (Exception e) {
+                if (attempt < MAX_RETRIES && isRetryableException(e)) {
+                    log.warn("[DRAFT] Gemini 재시도 ({}/{}) {}ms 후... 오류: {}", attempt + 1, MAX_RETRIES, RETRY_DELAY_MS, e.getMessage());
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw ie;
+                    }
                 } else {
                     throw e;
                 }
             }
         }
         throw new IllegalStateException("unreachable");
+    }
+
+    private boolean isRetryableException(Exception e) {
+        if (e instanceof HttpServerErrorException httpEx) {
+            return httpEx.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        return e instanceof RestClientException; // 연결 오류, 타임아웃 등
     }
 
     private String executeGeminiRequest(String prompt) throws Exception {
