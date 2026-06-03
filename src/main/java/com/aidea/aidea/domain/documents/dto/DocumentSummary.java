@@ -16,6 +16,7 @@ public class DocumentSummary {
     private String title;
     private LocalDateTime updatedAt;
     private String updatedBy; // User.id (Long) → String
+    private String aiStatus; // IDLE | DRAFT | FEEDBACK_IN_PROGRESS
 
     public static DocumentSummary from(Document document) {
         return new DocumentSummary(
@@ -25,7 +26,8 @@ public class DocumentSummary {
                 document.getUpdatedAt(),
                 document.getUpdatedBy() != null
                         ? document.getUpdatedBy().getId().toString()
-                        : null
+                        : null,
+                document.getStatus() != null ? document.getStatus().name() : "IDLE"
         );
     }
 }

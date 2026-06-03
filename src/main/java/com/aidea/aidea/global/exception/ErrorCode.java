@@ -49,7 +49,11 @@ public enum ErrorCode {
     // ===== 초안 (Draft) =====
     DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."),
     DRAFT_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_IN_PROGRESS", "초안 생성 중에는 피드백을 요청할 수 없습니다."),
-    DRAFT_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_ALREADY_IN_PROGRESS", "이미 초안 생성 중입니다.");
+    DRAFT_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_ALREADY_IN_PROGRESS", "이미 초안 생성 중입니다."),
+    DRAFT_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "DRAFT_QUOTA_EXCEEDED", "AI API 요청 한도를 초과했습니다."),
+    DRAFT_GEMINI_INVALID_RESPONSE(HttpStatus.INTERNAL_SERVER_ERROR, "DRAFT_GEMINI_INVALID_RESPONSE", "AI가 올바른 응답을 반환하지 않았습니다."),
+    DRAFT_GEMINI_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "DRAFT_GEMINI_API_ERROR", "AI API 호출 중 오류가 발생했습니다."),
+    DRAFT_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DRAFT_GENERATION_FAILED", "초안 생성 중 예기치 않은 오류가 발생했습니다.");
 
     private final HttpStatus httpStatus;  // HTTP 상태 코드 (404, 401 등)
     private final String code;            // 우리가 정한 에러 코드 문자열

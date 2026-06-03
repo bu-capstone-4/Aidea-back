@@ -1,20 +1,23 @@
 package com.aidea.aidea.domain.teamspace.service;
 
+import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
+import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.draft.service.DraftService;
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
-import com.aidea.aidea.domain.teamspace.entity.TeamSpaceStatus;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,16 +27,24 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TeamSpaceService {
 
     private final TeamSpaceRepository teamSpaceRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentUpdateRepository documentUpdateRepository;
+    private final FeedbackRepository feedbackRepository;
+    private final DraftRepository draftRepository;
     private final UserRepository userRepository;
     private final DraftService draftService;
 
     @Transactional
     public TeamSpaceCreateResponse create(TeamSpaceCreateRequest request, Long userId) {
+        log.warn("[TS] create request userId={} name={} ideaPresent={} docTypes={}",
+                userId, request.getName(),
+                request.getIdea() != null && !request.getIdea().isBlank(),
+                request.getDocumentTypes());
 
         if (request.getName() == null || request.getName().isBlank()) {
             throw new IllegalArgumentException(ErrorCode.INVALID_INPUT.getMessage());
@@ -46,10 +57,10 @@ public class TeamSpaceService {
                 .teamspaceId("ts_" + UUID.randomUUID())
                 .owner(owner)
                 .name(request.getName())
-                .status(TeamSpaceStatus.CREATING)
                 .build();
 
         TeamSpace saved = teamSpaceRepository.save(teamSpace);
+        log.warn("[TS] saved teamspaceId={} userId={}", saved.getTeamspaceId(), userId);
 
         teamspaceMemberRepository.save(TeamspaceMember.builder()
                 .teamspaceId(saved.getTeamspaceId())
@@ -57,20 +68,50 @@ public class TeamSpaceService {
                 .role(MemberRole.OWNER)
                 .build());
 
-        if (request.getDocumentTypes() != null) {
+        List<Document> savedDocuments = List.of();
+        if (request.getDocumentTypes() != null && !request.getDocumentTypes().isEmpty()) {
             List<Document> documents = request.getDocumentTypes().stream()
                     .map(type -> Document.create(UUID.randomUUID().toString(), saved, type, type.name()))
                     .collect(Collectors.toList());
-            documentRepository.saveAll(documents);
-            documents.forEach(doc -> draftService.triggerDraftGeneration(doc.getId()));
+            savedDocuments = documentRepository.saveAll(documents);
+            log.warn("[TS] documents saved teamspaceId={} count={}", saved.getTeamspaceId(), savedDocuments.size());
+
+            String ideaContext = request.getIdea();
+            String teamspaceName = saved.getName();
+
+            Document ideaDoc = savedDocuments.stream()
+                    .filter(doc -> doc.getType() == com.aidea.aidea.domain.documents.entity.DocumentType.IDEA)
+                    .findFirst()
+                    .orElse(null);
+
+            savedDocuments.forEach(doc -> {
+                if (ideaDoc != null && doc.getId().equals(ideaDoc.getId())) {
+                    log.warn("[TS] triggering idea draft docId={} teamspaceId={}", doc.getId(), saved.getTeamspaceId());
+                    draftService.triggerDraftGeneration(doc.getId(), ideaContext, teamspaceName);
+                } else {
+                    log.warn("[TS] saving pending draft docId={} teamspaceId={}", doc.getId(), saved.getTeamspaceId());
+                    draftService.savePendingDraft(doc.getId(), ideaContext);
+                }
+            });
         }
 
-        return TeamSpaceCreateResponse.builder()
+        List<TeamSpaceCreateResponse.DocumentInfo> docInfos = savedDocuments.stream()
+                .map(doc -> TeamSpaceCreateResponse.DocumentInfo.builder()
+                        .id(doc.getId())
+                        .type(doc.getType().name())
+                        .title(doc.getTitle())
+                        .aiStatus(doc.getStatus() != null ? doc.getStatus().name() : "DRAFT")
+                        .build())
+                .collect(Collectors.toList());
+
+        TeamSpaceCreateResponse response = TeamSpaceCreateResponse.builder()
                 .teamspaceId(saved.getTeamspaceId())
                 .name(saved.getName())
-                .status(saved.getStatus().name())
                 .createdAt(saved.getCreatedAt())
+                .documents(docInfos)
                 .build();
+        log.warn("[TS] create complete teamspaceId={} userId={} docCount={}", saved.getTeamspaceId(), userId, docInfos.size());
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -89,7 +130,6 @@ public class TeamSpaceService {
         return TeamSpaceDetailResponse.builder()
                 .teamspaceId(ts.getTeamspaceId())
                 .name(ts.getName())
-                .status(ts.getStatus().name())
                 .createdAt(ts.getCreatedAt())
                 .documents(docs)
                 .build();
@@ -106,7 +146,6 @@ public class TeamSpaceService {
                         .map(ts -> TeamSpaceListResponse.TeamSpaceSummary.builder()
                                 .teamspaceId(ts.getTeamspaceId())
                                 .name(ts.getName())
-                                .status(ts.getStatus().name())
                                 .createdAt(ts.getCreatedAt())
                                 .build())
                         .collect(Collectors.toList());
@@ -129,20 +168,11 @@ public class TeamSpaceService {
             ts.setName(request.getName());
         }
 
-        if (request.getStatus() != null) {
-            try {
-                ts.setStatus(TeamSpaceStatus.valueOf(request.getStatus()));
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException(ErrorCode.INVALID_INPUT.getMessage());
-            }
-        }
-
         TeamSpace saved = teamSpaceRepository.save(ts);
 
         return TeamSpaceCreateResponse.builder()
                 .teamspaceId(saved.getTeamspaceId())
                 .name(saved.getName())
-                .status(saved.getStatus().name())
                 .createdAt(saved.getCreatedAt())
                 .build();
     }
@@ -156,6 +186,14 @@ public class TeamSpaceService {
             throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
         }
 
+        List<Document> documents = documentRepository.findByTeamspaceId(id);
+        for (Document doc : documents) {
+            documentUpdateRepository.deleteByDocumentId(doc.getId());
+            feedbackRepository.deleteByDocumentId(doc.getId());
+            draftRepository.deleteByDocumentId(doc.getId());
+        }
+        documentRepository.deleteAll(documents);
+
         teamspaceMemberRepository.deleteAllByTeamspaceId(id);
         teamSpaceRepository.deleteById(id);
     }
@@ -165,6 +203,7 @@ public class TeamSpaceService {
                 .id(d.getId())
                 .type(d.getType() != null ? d.getType().name() : null)
                 .title(d.getTitle())
+                .aiStatus(d.getStatus() != null ? d.getStatus().name() : "IDLE")
                 .updatedAt(d.getUpdatedAt())
                 .updatedBy(d.getUpdatedBy() != null ? d.getUpdatedBy().getId().toString() : null)
                 .build();

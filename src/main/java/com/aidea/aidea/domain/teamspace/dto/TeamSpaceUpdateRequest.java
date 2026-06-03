@@ -12,5 +12,4 @@ import lombok.*;
 public class TeamSpaceUpdateRequest {
 
     private String name; // 수정할 팀스페이스 이름
-    private String status; // 수정할 상태
 }

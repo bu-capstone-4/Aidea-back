@@ -2,6 +2,14 @@ spring:
   config:
     activate:
       on-profile: dev
+  jpa:
+    hibernate:
+      ddl-auto: update
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
   security:
     oauth2:
       client:
@@ -16,5 +24,7 @@ app:
   cookie:
     secure: false
   base-url: http://localhost:8080
+  invitation:
+    expiry-hours: 48
 
 # 로그 레벨은 logback-spring.xml 의 springProfile name="dev" 블록에서 관리합니다.

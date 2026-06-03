@@ -3,6 +3,7 @@ package com.aidea.aidea.domain.documents.websocket;
 import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
 import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.FeedbackEventPublisher;
+import com.aidea.aidea.domain.draft.service.DraftEventPublisher;
 import com.aidea.aidea.domain.documents.dto.ActiveDraftInfo;
 import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
@@ -24,6 +25,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher {
+public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher, DraftEventPublisher {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
@@ -48,6 +50,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
     private final DraftRepository draftRepository;
     private final ObjectMapper objectMapper;
     private final SocketErrorSender socketErrorSender;
+    private final AwarenessStore awarenessStore;
 
     // --- 연결 수립 ---
 
@@ -61,6 +64,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
         log.info("[WS] connected sessionId={} docId={} userId={} role={}", session.getId(), docId, userId, role);
 
         sendDocInit(session, docId);
+        sendAwarenessInit(session, docId);
     }
 
     // --- 메시지 수신 ---
@@ -85,6 +89,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
         try {
             switch (type) {
                 case "doc:update" -> handleDocUpdate(session, payload);
+                case "doc:awareness" -> handleDocAwareness(session, payload);
                 default -> {
                     log.warn("[WS] unknown message type={} sessionId={}", type, session.getId());
                     socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
@@ -113,6 +118,12 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
         if (sessions != null) {
             sessions.remove(session);
         }
+
+        AwarenessStore.AwarenessEntry removed = awarenessStore.remove(docId, session.getId());
+        if (removed != null) {
+            broadcastAwarenessRemoval(docId, removed.yjsClientId());
+        }
+
         log.info("[WS] disconnected sessionId={} docId={} userId={} status={}", session.getId(), docId, userId, status.getCode());
     }
 
@@ -196,6 +207,68 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
         broadcastToOthers(session, docId, new TextMessage(broadcastJson));
     }
 
+    private void sendAwarenessInit(WebSocketSession session, String docId) throws IOException {
+        Collection<AwarenessStore.AwarenessEntry> entries = awarenessStore.getAll(docId);
+        if (entries.isEmpty()) return;
+
+        List<String> states = entries.stream()
+                .map(AwarenessStore.AwarenessEntry::base64Update)
+                .toList();
+
+        Map<String, Object> event = Map.of("type", "doc:awareness:init", "states", states);
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
+        log.debug("[WS] sendAwarenessInit sessionId={} docId={} count={}", session.getId(), docId, states.size());
+    }
+
+    private void handleDocAwareness(WebSocketSession session, Map<String, Object> payload) throws IOException {
+        String docId = (String) session.getAttributes().get("docId");
+        String base64Update = (String) payload.get("update");
+
+        if (base64Update == null || base64Update.isBlank()) {
+            log.warn("[WS] doc:awareness missing update field sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        Object clientIdRaw = payload.get("yjsClientId");
+        if (clientIdRaw == null) {
+            log.warn("[WS] doc:awareness missing yjsClientId sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+        long yjsClientId = ((Number) clientIdRaw).longValue();
+
+        awarenessStore.put(docId, session.getId(), yjsClientId, base64Update);
+
+        String broadcastJson = objectMapper.writeValueAsString(
+                Map.of("type", "doc:awareness", "update", base64Update)
+        );
+        broadcastToOthers(session, docId, new TextMessage(broadcastJson));
+        log.debug("[WS] doc:awareness docId={} yjsClientId={}", docId, yjsClientId);
+    }
+
+    private void broadcastAwarenessRemoval(String docId, long yjsClientId) {
+        try {
+            String json = objectMapper.writeValueAsString(
+                    Map.of("type", "doc:awareness:remove", "yjsClientId", yjsClientId)
+            );
+            TextMessage message = new TextMessage(json);
+            Set<WebSocketSession> sessions = docSessions.getOrDefault(docId, Collections.emptySet());
+            for (WebSocketSession s : sessions) {
+                if (s.isOpen()) {
+                    try {
+                        s.sendMessage(message);
+                    } catch (IOException e) {
+                        log.warn("[WS] broadcastAwarenessRemoval failed sessionId={}", s.getId());
+                    }
+                }
+            }
+            log.debug("[WS] broadcastAwarenessRemoval docId={} yjsClientId={}", docId, yjsClientId);
+        } catch (IOException e) {
+            log.error("[WS] failed to serialize awareness removal docId={}", docId, e);
+        }
+    }
+
     private void broadcastToOthers(WebSocketSession sender, String docId, TextMessage message) {
         Set<WebSocketSession> sessions = docSessions.getOrDefault(docId, Collections.emptySet());
         for (WebSocketSession s : sessions) {
@@ -223,4 +296,20 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
             }
         }
     }
+
+    @Override
+    public void publishDraftToDocument(String documentId, String jsonEvent) {
+        TextMessage message = new TextMessage(jsonEvent);
+        Set<WebSocketSession> sessions = docSessions.getOrDefault(documentId, Collections.emptySet());
+        for (WebSocketSession s : sessions) {
+            if (s.isOpen()) {
+                try {
+                    s.sendMessage(message);
+                } catch (IOException e) {
+                    log.warn("[WS] publishDraftToDocument failed sessionId={} docId={}", s.getId(), documentId);
+                }
+            }
+        }
+    }
+
 }

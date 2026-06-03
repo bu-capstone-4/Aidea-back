@@ -26,7 +26,6 @@ public class TeamSpaceListResponse {
 
         private String teamspaceId; // ID
         private String name; // 이름
-        private String status; // 상태
         private LocalDateTime createdAt; // 생성일시
     }
 }

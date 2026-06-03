@@ -27,7 +27,7 @@ public class DraftService {
     private final DraftAsyncExecutor draftAsyncExecutor;
 
     @Transactional
-    public void triggerDraftGeneration(String documentId) {
+    public void savePendingDraft(String documentId, String ideaContext) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
 
@@ -37,15 +37,38 @@ public class DraftService {
 
         document.setStatus(DocumentAiStatus.DRAFT);
 
-        Draft draft = Draft.create(UUID.randomUUID().toString(), document);
+        Draft draft = Draft.create(UUID.randomUUID().toString(), document, ideaContext);
         draftRepository.save(draft);
+        log.warn("[DRAFT] pending draft saved draftId={} documentId={}", draft.getId(), documentId);
+    }
+
+    @Transactional
+    public void triggerDraftGeneration(String documentId, String ideaContext, String teamspaceName) {
+        log.warn("[DRAFT] triggerDraftGeneration called documentId={}", documentId);
+
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
+
+        if (draftRepository.existsByDocumentIdAndStatus(documentId, DraftStatus.PENDING)) {
+            log.warn("[DRAFT] skip - already PENDING documentId={}", documentId);
+            return;
+        }
+
+        document.setStatus(DocumentAiStatus.DRAFT);
+
+        Draft draft = Draft.create(UUID.randomUUID().toString(), document, ideaContext);
+        draftRepository.save(draft);
+        log.warn("[DRAFT] draft saved draftId={} documentId={}", draft.getId(), documentId);
 
         String draftId = draft.getId();
+        String teamspaceId = document.getTeamspace().getTeamspaceId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                draftAsyncExecutor.generateDraftAsync(draftId);
+                log.warn("[DRAFT] afterCommit fired - scheduling async draftId={} teamspaceId={}", draftId, teamspaceId);
+                draftAsyncExecutor.generateDraftAsync(draftId, teamspaceId, teamspaceName);
             }
         });
+        log.warn("[DRAFT] afterCommit synchronization registered draftId={}", draftId);
     }
 }

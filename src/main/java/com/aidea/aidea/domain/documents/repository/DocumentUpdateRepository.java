@@ -24,4 +24,6 @@ public interface DocumentUpdateRepository extends JpaRepository<DocumentUpdate, 
     // 재시작 폴백: 미머지 rows가 존재하는 docId 목록
     @Query("SELECT DISTINCT u.document.id FROM DocumentUpdate u")
     List<String> findDocIdsWithPendingUpdates();
+
+    void deleteByDocumentId(String documentId);
 }
