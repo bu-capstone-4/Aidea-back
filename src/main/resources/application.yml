@@ -22,12 +22,6 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
     show-sql: false
     open-in-view: false
-    defer-datasource-initialization: true
-
-  # 💡 JPA(Hibernate)가 ddl-auto로 테이블을 다 만든 "후"에 Flyway가 실행되도록 지연시키는 설정입니다.
-  sql:
-    init:
-      mode: always
 
   flyway:
     enabled: true
