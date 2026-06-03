@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface DraftRepository extends JpaRepository<Draft, String> {
     Optional<Draft> findByDocumentId(String documentId);
     boolean existsByDocumentIdAndStatus(String documentId, DraftStatus status);
+    void deleteByDocumentId(String documentId);
 
     @Query("SELECT d FROM Draft d JOIN d.document doc WHERE doc.teamspace.teamspaceId = :teamspaceId AND d.status = :status")
     List<Draft> findByTeamspaceIdAndStatus(@Param("teamspaceId") String teamspaceId, @Param("status") DraftStatus status);

@@ -1,9 +1,12 @@
 package com.aidea.aidea.domain.teamspace.service;
 
+import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
+import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.draft.service.DraftService;
 import com.aidea.aidea.domain.teamspace.dto.*;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
@@ -30,6 +33,9 @@ public class TeamSpaceService {
     private final TeamSpaceRepository teamSpaceRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentUpdateRepository documentUpdateRepository;
+    private final FeedbackRepository feedbackRepository;
+    private final DraftRepository draftRepository;
     private final UserRepository userRepository;
     private final DraftService draftService;
 
@@ -179,6 +185,14 @@ public class TeamSpaceService {
         if (!ts.getOwner().getId().equals(userId)) {
             throw new CustomException(ErrorCode.NOT_TEAMSPACE_OWNER);
         }
+
+        List<Document> documents = documentRepository.findByTeamspaceId(id);
+        for (Document doc : documents) {
+            documentUpdateRepository.deleteByDocumentId(doc.getId());
+            feedbackRepository.deleteByDocumentId(doc.getId());
+            draftRepository.deleteByDocumentId(doc.getId());
+        }
+        documentRepository.deleteAll(documents);
 
         teamspaceMemberRepository.deleteAllByTeamspaceId(id);
         teamSpaceRepository.deleteById(id);

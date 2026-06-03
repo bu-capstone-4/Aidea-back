@@ -13,4 +13,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, String> {
 
     Optional<Feedback> findTopByDocumentIdAndStatusNotInOrderByCreatedAtDesc(
             String documentId, Collection<FeedbackStatus> statuses);
+
+    void deleteByDocumentId(String documentId);
 }
