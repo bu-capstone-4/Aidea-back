@@ -1,10 +1,8 @@
 package com.aidea.aidea.domain.invitation.controller;
 
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,11 +21,12 @@ import com.aidea.aidea.domain.invitation.dto.AcceptInvitationRequest;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteRequest;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteResultItem;
 import com.aidea.aidea.domain.invitation.dto.InvitationRequest;
+import com.aidea.aidea.domain.invitation.dto.InvitationResponse;
+import com.aidea.aidea.domain.invitation.dto.InviteMemberRequest;
 import com.aidea.aidea.domain.invitation.service.InvitationService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.service.MemberService;
 import com.aidea.aidea.global.dto.GlobalResponse;
-import com.aidea.aidea.global.util.CookieUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -38,28 +37,26 @@ public class InvitationController {
 
     private final InvitationService invitationService;
     private final MemberService memberService;
-    private final CookieUtils cookieUtils;
 
     @Value("${frontend.url}")
     private String frontendUrl;
 
     @PostMapping("/api/invitations")
     @ResponseStatus(HttpStatus.CREATED)
-    public GlobalResponse<Void> invite(@Valid @RequestBody InvitationRequest request,
-                                        @AuthenticationPrincipal String userId) {
-        invitationService.sendInvitation(Long.parseLong(userId), request.getTeamspaceId(), request.getInviteeEmail(), request.getRole());
-        return GlobalResponse.ok("초대 이메일이 발송되었습니다.");
+    public GlobalResponse<InvitationResponse> invite(@Valid @RequestBody InvitationRequest request,
+                                                     @AuthenticationPrincipal String userId) {
+        InvitationResponse result = new InvitationResponse(
+                invitationService.sendInvitation(Long.parseLong(userId), request.getTeamspaceId(), request.getInviteeEmail(), request.getRole()));
+        return GlobalResponse.ok("초대 이메일이 발송되었습니다.", result);
     }
 
     // 이메일 링크 클릭 시 브라우저로 직접 접근 (GET)
     @GetMapping("/api/invitations/accept")
     public RedirectView acceptByLink(@RequestParam String token,
-                                     @AuthenticationPrincipal String userId,
-                                     HttpServletResponse response) {
-        // 비로그인 상태 - 초대 토큰을 쿠키에 저장하고 GitHub OAuth 로그인으로 리다이렉트
+                                     @AuthenticationPrincipal String userId) {
+        // 비로그인 상태 - 초대 토큰을 OAuth state에 실어서 GitHub OAuth 로그인으로 리다이렉트
         if (userId == null || "anonymousUser".equals(userId)) {
-            response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.createPendingInviteCookie(token).toString());
-            return new RedirectView("/oauth2/authorization/github");
+            return new RedirectView("/oauth2/authorization/github?invite_token=" + token);
         }
 
         try {
@@ -83,12 +80,13 @@ public class InvitationController {
     }
 
     @PostMapping("/api/teamspaces/{teamspaceId}/members/invite")
-    public GlobalResponse<Void> inviteMember(
+    public GlobalResponse<InvitationResponse> inviteMember(
             @PathVariable String teamspaceId,
-            @RequestBody Map<String, String> body,
+            @Valid @RequestBody InviteMemberRequest request,
             @AuthenticationPrincipal String userId) {
-        invitationService.sendInvitation(Long.parseLong(userId), teamspaceId, body.get("email"), MemberRole.MEMBER);
-        return GlobalResponse.ok("초대가 발송되었습니다.");
+        InvitationResponse result = new InvitationResponse(
+                invitationService.sendInvitation(Long.parseLong(userId), teamspaceId, request.getEmail(), MemberRole.MEMBER));
+        return GlobalResponse.ok("초대가 발송되었습니다.", result);
     }
 
     @PostMapping("/api/teamspaces/{teamspaceId}/invitations")

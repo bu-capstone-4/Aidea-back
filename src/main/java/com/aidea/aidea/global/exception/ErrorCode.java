@@ -31,6 +31,7 @@ public enum ErrorCode {
     // ===== 초대 (Invitation) =====
     INVITATION_NOT_FOUND(HttpStatus.NOT_FOUND, "INVITATION_NOT_FOUND", "초대를 찾을 수 없습니다."),
     INVITATION_EXPIRED(HttpStatus.BAD_REQUEST, "INVITATION_EXPIRED", "만료된 초대입니다."),
+    INVITATION_EMAIL_MISMATCH(HttpStatus.FORBIDDEN, "INVITATION_EMAIL_MISMATCH", "초대받은 이메일 계정으로 로그인하세요."),
     ALREADY_INVITED(HttpStatus.CONFLICT, "ALREADY_INVITED", "이미 초대된 이메일입니다."),
     INVITATION_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "INVITATION_001", "한 번에 최대 8명까지 초대할 수 있습니다."),
 
