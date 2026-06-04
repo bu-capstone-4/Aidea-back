@@ -58,9 +58,9 @@ public class InvitationController {
     public void acceptByLink(@RequestParam String token,
                              @AuthenticationPrincipal String userId,
                              HttpServletResponse response) throws IOException {
-        // 비로그인 상태 - 초대 토큰을 OAuth state에 실어서 GitHub OAuth 로그인으로 리다이렉트
+        // 비로그인 상태 - 프론트엔드 초대 수락 페이지로 이동시키고 프론트가 로그인·수락을 처리
         if (userId == null || "anonymousUser".equals(userId)) {
-            response.sendRedirect("/oauth2/authorization/github?invite_token=" + token);
+            response.sendRedirect(frontendUrl + "/invite?token=" + token);
             return;
         }
 
