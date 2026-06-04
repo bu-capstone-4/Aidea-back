@@ -1,5 +1,6 @@
 package com.aidea.aidea.domain.invitation.controller;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,10 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.view.RedirectView;
 
-import com.aidea.aidea.global.exception.CustomException;
-import com.aidea.aidea.global.exception.ErrorCode;
 import com.aidea.aidea.domain.invitation.dto.AcceptInvitationRequest;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteRequest;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteResultItem;
@@ -27,7 +25,10 @@ import com.aidea.aidea.domain.invitation.service.InvitationService;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.service.MemberService;
 import com.aidea.aidea.global.dto.GlobalResponse;
+import com.aidea.aidea.global.exception.CustomException;
+import com.aidea.aidea.global.exception.ErrorCode;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -51,23 +52,28 @@ public class InvitationController {
     }
 
     // 이메일 링크 클릭 시 브라우저로 직접 접근 (GET)
+    // @RestController에서 RedirectView를 반환하면 JSON 직렬화 시도로 리다이렉트가 동작하지 않으므로
+    // HttpServletResponse.sendRedirect()를 직접 사용한다.
     @GetMapping("/api/invitations/accept")
-    public RedirectView acceptByLink(@RequestParam String token,
-                                     @AuthenticationPrincipal String userId) {
+    public void acceptByLink(@RequestParam String token,
+                             @AuthenticationPrincipal String userId,
+                             HttpServletResponse response) throws IOException {
         // 비로그인 상태 - 초대 토큰을 OAuth state에 실어서 GitHub OAuth 로그인으로 리다이렉트
         if (userId == null || "anonymousUser".equals(userId)) {
-            return new RedirectView("/oauth2/authorization/github?invite_token=" + token);
+            response.sendRedirect("/oauth2/authorization/github?invite_token=" + token);
+            return;
         }
 
         try {
             String docId = invitationService.acceptInvitation(token, Long.parseLong(userId));
             String target = (docId != null) ? "/main/" + docId : "/";
-            return new RedirectView(frontendUrl + target);
+            response.sendRedirect(frontendUrl + target);
         } catch (CustomException e) {
             if (e.getErrorCode() == ErrorCode.ALREADY_MEMBER) {
-                return new RedirectView(frontendUrl + "/");
+                response.sendRedirect(frontendUrl + "/");
+            } else {
+                response.sendRedirect(frontendUrl + "/?error=" + e.getErrorCode().getCode());
             }
-            return new RedirectView(frontendUrl + "/?error=" + e.getErrorCode().getCode());
         }
     }
 
