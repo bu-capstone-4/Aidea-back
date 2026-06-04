@@ -1,6 +1,5 @@
 package com.aidea.aidea.domain.invitation.service;
 
-import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteResultItem;
@@ -93,14 +92,6 @@ public class InvitationService {
 
         if (invitation.getStatus() != InvitationStatus.PENDING) {
             throw new CustomException(ErrorCode.INVITATION_EXPIRED);
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        // 초대받은 이메일과 로그인된 유저 이메일 검증
-        if (!invitation.getInviteeEmail().equalsIgnoreCase(user.getEmail())) {
-            throw new CustomException(ErrorCode.INVITATION_EMAIL_MISMATCH);
         }
 
         teamspaceMemberRepository
