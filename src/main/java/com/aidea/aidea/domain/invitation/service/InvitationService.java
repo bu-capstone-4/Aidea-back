@@ -36,8 +36,8 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
 
-    @Value("${app.base-url}")
-    private String backendUrl;
+    @Value("${frontend.url}")
+    private String frontendUrl;
 
     public Invitation sendInvitation(Long inviterId, String teamspaceId, String inviteeEmail, MemberRole role) {
         // 팀스페이스 존재 확인
@@ -73,7 +73,7 @@ public class InvitationService {
 
         invitationRepository.save(invitation);
 
-        String inviteLink = backendUrl + "/api/invitations/accept?token=" + invitation.getToken();
+        String inviteLink = frontendUrl + "/invite?token=" + invitation.getToken();
         try {
             mailService.sendInvitationMail(inviteeEmail, inviteLink);
         } catch (MailException e) {
@@ -174,7 +174,7 @@ public class InvitationService {
 
             invitationRepository.save(invitation);
 
-            String inviteLink = backendUrl + "/api/invitations/accept?token=" + invitation.getToken();
+            String inviteLink = frontendUrl + "/invite?token=" + invitation.getToken();
             try {
                 mailService.sendInvitationMail(email, inviteLink);
             } catch (MailException e) {
