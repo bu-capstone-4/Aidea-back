@@ -54,20 +54,6 @@ public class MemberService {
                     .build());
         }
 
-        // 대기 중인 초대 (PENDING)
-        List<Invitation> pending = invitationRepository.findByTeamspaceIdAndStatus(teamspaceId, InvitationStatus.PENDING);
-        for (Invitation inv : pending) {
-            result.add(MemberInfoResponse.builder()
-                    .userId(null)
-                    .name(null)
-                    .email(inv.getInviteeEmail())
-                    .role(inv.getRole() != null ? inv.getRole().name() : MemberRole.MEMBER.name())
-                    .status("PENDING")
-                    .profileImageUrl(null)
-                    .invitationId(inv.getId())
-                    .build());
-        }
-
         return result;
     }
 

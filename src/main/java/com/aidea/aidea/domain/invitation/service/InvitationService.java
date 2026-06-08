@@ -1,6 +1,5 @@
 package com.aidea.aidea.domain.invitation.service;
 
-import com.aidea.aidea.domain.auth.entity.User;
 import com.aidea.aidea.domain.auth.repository.UserRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.invitation.dto.BulkInviteResultItem;
@@ -36,10 +35,10 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
 
-    @Value("${app.base-url}")
-    private String backendUrl;
+    @Value("${frontend.url}")
+    private String frontendUrl;
 
-    public void sendInvitation(Long inviterId, String teamspaceId, String inviteeEmail, MemberRole role) {
+    public Invitation sendInvitation(Long inviterId, String teamspaceId, String inviteeEmail, MemberRole role) {
         // 팀스페이스 존재 확인
         teamSpaceRepository.findById(teamspaceId)
                 .orElseThrow(() -> new CustomException(ErrorCode.TEAMSPACE_NOT_FOUND));
@@ -73,12 +72,14 @@ public class InvitationService {
 
         invitationRepository.save(invitation);
 
-        String inviteLink = backendUrl + "/api/invitations/accept?token=" + invitation.getToken();
+        String inviteLink = frontendUrl + "/invite?token=" + invitation.getToken();
         try {
             mailService.sendInvitationMail(inviteeEmail, inviteLink);
         } catch (MailException e) {
             log.warn("초대 메일 발송 실패 - email: {}, cause: {}", inviteeEmail, e.getMessage());
         }
+
+        return invitation;
     }
 
     public String acceptInvitation(String token, Long userId) {
@@ -91,14 +92,6 @@ public class InvitationService {
 
         if (invitation.getStatus() != InvitationStatus.PENDING) {
             throw new CustomException(ErrorCode.INVITATION_EXPIRED);
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        // 초대받은 이메일과 로그인된 유저 이메일 검증
-        if (!invitation.getInviteeEmail().equalsIgnoreCase(user.getEmail())) {
-            throw new CustomException(ErrorCode.INVITATION_NOT_FOUND);
         }
 
         teamspaceMemberRepository
@@ -150,16 +143,16 @@ public class InvitationService {
                     .orElse(false);
 
             if (isAlreadyMember) {
-                results.add(new BulkInviteResultItem(email, "ALREADY_MEMBER"));
+                results.add(new BulkInviteResultItem(email, "ALREADY_MEMBER", null));
                 continue;
             }
 
-            boolean isAlreadyInvited = invitationRepository
+            Invitation existingInvitation = invitationRepository
                     .findByTeamspaceIdAndInviteeEmailAndStatus(teamspaceId, email, InvitationStatus.PENDING)
-                    .isPresent();
+                    .orElse(null);
 
-            if (isAlreadyInvited) {
-                results.add(new BulkInviteResultItem(email, "SENT"));
+            if (existingInvitation != null) {
+                results.add(new BulkInviteResultItem(email, "SENT", existingInvitation.getId()));
                 continue;
             }
 
@@ -172,14 +165,14 @@ public class InvitationService {
 
             invitationRepository.save(invitation);
 
-            String inviteLink = backendUrl + "/api/invitations/accept?token=" + invitation.getToken();
+            String inviteLink = frontendUrl + "/invite?token=" + invitation.getToken();
             try {
                 mailService.sendInvitationMail(email, inviteLink);
             } catch (MailException e) {
                 log.warn("초대 메일 발송 실패 - email: {}, cause: {}", email, e.getMessage());
             }
 
-            results.add(new BulkInviteResultItem(email, "SENT"));
+            results.add(new BulkInviteResultItem(email, "SENT", invitation.getId()));
         }
 
         return results;

@@ -49,9 +49,16 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     @Override
     public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request,
                                                                   HttpServletResponse response) {
-        OAuth2AuthorizationRequest request0 = loadAuthorizationRequest(request);
+        OAuth2AuthorizationRequest authRequest = loadAuthorizationRequest(request);
+        if (authRequest != null) {
+            Object inviteToken = authRequest.getAdditionalParameters()
+                    .get(CustomAuthorizationRequestResolver.INVITE_TOKEN_PARAM);
+            if (inviteToken != null) {
+                request.setAttribute(CustomAuthorizationRequestResolver.INVITE_TOKEN_PARAM, inviteToken.toString());
+            }
+        }
         deleteCookie(request, response, COOKIE_NAME);
-        return request0;
+        return authRequest;
     }
 
     private String serialize(OAuth2AuthorizationRequest authorizationRequest) {

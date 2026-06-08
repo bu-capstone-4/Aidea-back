@@ -72,16 +72,22 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             log.info("[AUTH] oauth2 login userId={} provider={}", userId, provider);
 
             // 초대 링크로 진입한 경우 자동 수락 처리
-            String pendingInviteToken = cookieUtils.extractCookieValue(request, "pending_invite_token").orElse(null);
+            String pendingInviteToken = (String) request.getAttribute(CustomAuthorizationRequestResolver.INVITE_TOKEN_PARAM);
             if (pendingInviteToken != null) {
-                response.addHeader(HttpHeaders.SET_COOKIE, cookieUtils.expireCookie("pending_invite_token").toString());
                 try {
                     String docId = invitationService.acceptInvitation(pendingInviteToken, userId);
                     String target = (docId != null) ? "/main/" + docId : "/";
                     getRedirectStrategy().sendRedirect(request, response, frontendUrl + target);
                     return;
+                } catch (CustomException ex) {
+                    log.warn("[AUTH] 초대 자동 수락 실패 token={} reason={}", pendingInviteToken, ex.getMessage());
+                    getRedirectStrategy().sendRedirect(request, response,
+                            frontendUrl + "/?error=" + ex.getErrorCode().getCode());
+                    return;
                 } catch (Exception ex) {
                     log.warn("[AUTH] 초대 자동 수락 실패 token={} reason={}", pendingInviteToken, ex.getMessage());
+                    getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/?error=INTERNAL_ERROR");
+                    return;
                 }
             }
 
