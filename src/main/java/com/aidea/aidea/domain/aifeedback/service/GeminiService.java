@@ -6,6 +6,7 @@ import com.aidea.aidea.domain.aifeedback.entity.FeedbackStatus;
 import com.aidea.aidea.domain.aifeedback.entity.Question;
 import com.aidea.aidea.domain.aifeedback.repository.FeedbackRepository;
 import com.aidea.aidea.domain.aifeedback.service.dto.GeminiResult;
+import com.aidea.aidea.domain.documents.entity.DocumentType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +43,19 @@ public class GeminiService {
     @Value("${gemini.model}")
     private String geminiModel;
 
-    private final RestClient restClient = RestClient.builder()
-            .requestFactory(new JdkClientHttpRequestFactory(
-                    HttpClient.newBuilder()
-                            .connectTimeout(Duration.ofSeconds(10))
-                            .build()
-            ))
-            .build();
+    private final RestClient restClient = createRestClient();
+
+    private static RestClient createRestClient() {
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(10))
+                        .build()
+        );
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .build();
+    }
 
     @Async
     @Transactional
@@ -63,11 +70,13 @@ public class GeminiService {
             String prompt = buildInitialPrompt(
                     feedback.getOriginalMarkdown(),
                     feedback.getAdditionalRequest(),
-                    feedback.getIdeaMarkdown()
+                    feedback.getIdeaMarkdown(),
+                    feedback.getDocument().getType()
             );
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
-            GeminiResult result = callGeminiApi(prompt);
+            // 1차 호출은 "충분한지/빈약한지" 판단이 필요하므로 추론 예산을 부여
+            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_JUDGMENT);
             log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
             if (result.type() == GeminiResult.Type.QUESTIONS) {
@@ -97,11 +106,13 @@ public class GeminiService {
                     feedback.getQuestions(),
                     feedback.getAnswers(),
                     feedback.getAdditionalRequest(),
-                    feedback.getIdeaMarkdown()
+                    feedback.getIdeaMarkdown(),
+                    feedback.getDocument().getType()
             );
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
-            GeminiResult result = callGeminiApi(prompt);
+            // 이미 type=FEEDBACK으로 방향이 정해진 단순 생성 호출이므로 추론 불필요
+            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_SIMPLE);
             log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
             if (result.type() != GeminiResult.Type.FEEDBACK) {
@@ -159,7 +170,12 @@ public class GeminiService {
     }
 
 
-    private GeminiResult callGeminiApi(String prompt) throws Exception {
+    // 판단(QUESTIONS/FEEDBACK 분기)이 필요한 호출에 부여하는 추론 예산
+    private static final int THINKING_BUDGET_JUDGMENT = 2048;
+    // 방향이 이미 정해진 단순 생성 호출은 추론을 끔
+    private static final int THINKING_BUDGET_SIMPLE = 0;
+
+    private GeminiResult callGeminiApi(String prompt, int thinkingBudget) throws Exception {
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(
                         Map.of("parts", List.of(Map.of("text", prompt)))
@@ -167,8 +183,8 @@ public class GeminiService {
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
                         "responseSchema", buildResponseSchema(),
-                        "thinkingConfig", Map.of("thinkingBudget", 0),
-                        "maxOutputTokens", 8192
+                        "thinkingConfig", Map.of("thinkingBudget", thinkingBudget),
+                        "maxOutputTokens", 65536
                 )
         );
 
@@ -241,9 +257,12 @@ public class GeminiService {
                                                 "text", Map.of("type", "STRING"),
                                                 "options", Map.of(
                                                         "type", "ARRAY",
-                                                        "items", Map.of("type", "STRING")
+                                                        "items", Map.of("type", "STRING"),
+                                                        "minItems", 3,
+                                                        "maxItems", 5
                                                 )
-                                        )
+                                        ),
+                                        "required", List.of("id", "section", "text", "options")
                                 )
                         )
                 ),
@@ -252,7 +271,7 @@ public class GeminiService {
     }
 
     //Gemini에게 줄 첫 명령서 작성
-    private String buildInitialPrompt(String originalMarkdown, String additionalRequest, String ideaMarkdown) {
+    private String buildInitialPrompt(String originalMarkdown, String additionalRequest, String ideaMarkdown, DocumentType documentType) {
         String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
                 ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
                 : "";
@@ -265,6 +284,8 @@ public class GeminiService {
             - 문서가 충분히 구체적이면 → 수정안을 작성
             - 문서가 너무 빈약하면 → 핵심 정보를 묻는 질문 생성
 
+            이 문서는 %s야. 이런 문서가 반드시 다뤄야 할 핵심 항목은 다음과 같아: %s
+
             %s[DOCUMENT]
             %s
 
@@ -274,18 +295,22 @@ public class GeminiService {
             [INSTRUCTION]
             1. 문서의 정보량과 구체성을 판단해.
             2. [IDEA DOCUMENT]가 있으면 해당 아이디어의 방향성과 맥락을 참고해서 검토해.
-            3. 빈약 판단 기준:
-               - 핵심 기능, 타깃 사용자, 차별점 중 2개 이상이 한 줄 미만이거나 없음
-               - 또는 전체 문서가 200자 미만
+            3. 빈약 판단 기준: 위 핵심 항목 중 2개 이상이 한 줄 미만이거나 없음, 또는 전체 문서가 200자 미만
             4. 충분 판단이면 type="FEEDBACK", revisedMarkdown에 개선된 마크다운 작성
-               (원본 구조 유지, 부족한 섹션 보강, 모호한 표현 명확화)
-            5. 빈약 판단이면 type="QUESTIONS", questions에 핵심 정보를 묻는 질문 3~5개 생성
-               각 질문은 id(q1, q2 ...), section(어느 섹션인지), text(질문 내용),
-               options(객관식 선택지, 가능하면) 포함
+               - 원본 구조는 유지하면서, 위 핵심 항목 중 빠지거나 부실한 부분을 보강해
+               - "다양한 기능", "편리한 UI"처럼 모호한 표현은 구체적인 값으로 바꿔 써
+               - 분량은 섹션별로 원본 대비 최대 1.5배 이내로 — 과도하게 늘리지 말고 핵심만 보강
+            5. 빈약 판단이면 type="QUESTIONS", questions에 핵심 정보를 묻는 질문 3~5개 생성.
+               각 질문은 id(q1, q2 ...), section(어느 섹션인지), text(질문 내용)와 함께
+               options에 서로 구분되는 구체적인 보기를 3~4개 반드시 포함해.
+               자유 서술형(주관식) 질문은 만들지 마라 — 사용자가 그 중 하나를 고르거나
+               직접 입력할 수 있도록, 보기는 실제로 선택 가능한 구체적인 값으로 작성해.
 
             [OUTPUT]
             반드시 JSON 형식. 다른 형식 절대 안 됨.
             """.formatted(
+                documentType.displayName(),
+                documentType.requiredElements(),
                 ideaSection,
                 originalMarkdown,
                 additionalRequest != null ? additionalRequest : "없음"
@@ -298,7 +323,8 @@ public class GeminiService {
             List<Question> questions,
             List<Answer> answers,
             String additionalRequest,
-            String ideaMarkdown
+            String ideaMarkdown,
+            DocumentType documentType
     ) {
         String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
                 ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
@@ -323,6 +349,8 @@ public class GeminiService {
             이전에 사용자에게 핵심 정보를 묻는 질문을 했고, 답변을 받았어.
             이제 원본 + 답변을 합쳐서 수정안을 작성해.
 
+            이 문서는 %s야. 이런 문서가 반드시 다뤄야 할 핵심 항목은 다음과 같아: %s
+
             %s[ORIGINAL DOCUMENT]
             %s
 
@@ -334,13 +362,16 @@ public class GeminiService {
 
             [INSTRUCTION]
             - [IDEA DOCUMENT]가 있으면 아이디어의 방향성을 참고해서 수정안 작성
-            - 답변 정보를 원본에 자연스럽게 녹여서 수정안 작성
+            - 답변 정보를 원본과 위 핵심 항목에 자연스럽게 녹여서 수정안 작성
             - 사용자가 답하지 않은 영역은 추측하지 말고 기존 내용 유지
+            - 분량은 섹션별로 원본 대비 최대 1.5배 이내로 — 과도하게 늘리지 말고 핵심만 보강
             - type="FEEDBACK"으로 응답, revisedMarkdown에 마크다운
 
             [OUTPUT]
             반드시 JSON 형식.
             """.formatted(
+                documentType.displayName(),
+                documentType.requiredElements(),
                 ideaSection,
                 originalMarkdown,
                 qa.toString(),

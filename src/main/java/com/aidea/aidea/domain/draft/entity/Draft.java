@@ -1,6 +1,8 @@
 package com.aidea.aidea.domain.draft.entity;
 
 import com.aidea.aidea.domain.documents.entity.Document;
+import com.aidea.aidea.domain.draft.converter.DraftAnswersConverter;
+import com.aidea.aidea.domain.draft.converter.DraftQuestionsConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -8,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "drafts")
@@ -40,6 +43,16 @@ public class Draft {
 
     @Column(name = "idea_context", columnDefinition = "MEDIUMTEXT")
     private String ideaContext;
+
+    @Setter
+    @Column(name = "questions", columnDefinition = "JSON")
+    @Convert(converter = DraftQuestionsConverter.class)
+    private List<DraftQuestion> questions;
+
+    @Setter
+    @Column(name = "answers", columnDefinition = "JSON")
+    @Convert(converter = DraftAnswersConverter.class)
+    private List<DraftAnswer> answers;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

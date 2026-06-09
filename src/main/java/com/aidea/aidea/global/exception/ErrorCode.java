@@ -49,6 +49,7 @@ public enum ErrorCode {
     
     // ===== 초안 (Draft) =====
     DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."),
+    DRAFT_INVALID_STATUS(HttpStatus.BAD_REQUEST, "DRAFT_INVALID_STATUS", "현재 상태에서는 해당 작업을 수행할 수 없습니다."),
     DRAFT_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_IN_PROGRESS", "초안 생성 중에는 피드백을 요청할 수 없습니다."),
     DRAFT_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "DRAFT_ALREADY_IN_PROGRESS", "이미 초안 생성 중입니다."),
     DRAFT_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "DRAFT_QUOTA_EXCEEDED", "AI API 요청 한도를 초과했습니다."),

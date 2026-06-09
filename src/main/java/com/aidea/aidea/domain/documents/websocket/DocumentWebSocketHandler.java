@@ -7,6 +7,7 @@ import com.aidea.aidea.domain.draft.service.DraftEventPublisher;
 import com.aidea.aidea.domain.documents.dto.ActiveDraftInfo;
 import com.aidea.aidea.domain.documents.dto.ActiveFeedbackInfo;
 import com.aidea.aidea.domain.documents.service.DocumentService;
+import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
@@ -156,7 +157,12 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
                 activeFeedback != null ? activeFeedback.status() : "none");
 
         ActiveDraftInfo activeDraft = draftRepository.findByDocumentId(docId)
-                .map(d -> new ActiveDraftInfo(d.getId(), d.getStatus(), d.getContent()))
+                .map(d -> new ActiveDraftInfo(
+                        d.getId(),
+                        d.getStatus(),
+                        d.getContent(),
+                        d.getStatus() == DraftStatus.QUESTIONING ? d.getQuestions() : null
+                ))
                 .orElse(null);
 
         Map<String, Object> event = new LinkedHashMap<>();

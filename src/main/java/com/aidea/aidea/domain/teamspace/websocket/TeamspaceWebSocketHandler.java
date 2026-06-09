@@ -181,6 +181,19 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler
         publishEvent(teamspaceId, "draft:error", Map.of("documentId", documentId, "errorCode", errorCode));
     }
 
+    @Override
+    public void publishDraftQuestioning(String teamspaceId, String documentId, String draftId,
+                                         List<com.aidea.aidea.domain.draft.entity.DraftQuestion> questions) {
+        log.warn("[WS-TS] publishDraftQuestioning teamspaceId={} documentId={} draftId={} questionCount={}",
+                teamspaceId, documentId, draftId, questions.size());
+        Map<String, Object> data = Map.of(
+                "documentId", documentId,
+                "draftId", draftId,
+                "questions", questions
+        );
+        publishEvent(teamspaceId, "draft:questioning", data);
+    }
+
     private void publishEvent(String teamspaceId, String eventType, Map<String, Object> data) {
         Set<WebSocketSession> sessions = teamspaceSessions.getOrDefault(teamspaceId, Collections.emptySet());
         if (sessions.isEmpty()) {
