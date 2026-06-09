@@ -3,6 +3,8 @@ package com.aidea.aidea.domain.draft.service;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.entity.DocumentAiStatus;
 import com.aidea.aidea.domain.draft.entity.Draft;
+import com.aidea.aidea.domain.draft.entity.DraftAnswer;
+import com.aidea.aidea.domain.draft.entity.DraftQuestion;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
@@ -30,6 +32,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 
 @Component
 @RequiredArgsConstructor
@@ -49,26 +52,70 @@ public class DraftAsyncExecutor {
     @Value("${gemini.base-url}") private String geminiBaseUrl;
     @Value("${gemini.model}")    private String geminiModel;
 
-    private final RestClient restClient = RestClient.builder()
-            .requestFactory(new JdkClientHttpRequestFactory(
-                    HttpClient.newBuilder()
-                            .connectTimeout(Duration.ofSeconds(10))
-                            .build()))
-            .build();
+    private final RestClient restClient = createRestClient();
 
+    private static RestClient createRestClient() {
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(10))
+                        .build()
+        );
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .build();
+    }
+
+    /**
+     * IDEA 문서 초안 생성의 진입점.
+     * 짧은 아이디어 설명만으로 바로 초안을 쓰는 대신, 먼저 아이디어를 구체화하기 위한
+     * 객관식 질문을 생성해 QUESTIONING으로 전환한다 (질문 → 답변 → 최종 생성의 2단계 흐름).
+     * 이 메서드는 IDEA 문서에 대해서만 호출된다 — PLAN 등 나머지 문서는
+     * generateDraftAsync(draftId, teamspaceId, teamspaceName, ideaContentOverride)로 단일 호출 생성된다.
+     */
     @Async
     @Transactional
     public void generateDraftAsync(String draftId, String teamspaceId, String teamspaceName) {
-        log.warn("[DRAFT] generateDraftAsync started draftId={} teamspaceId={} thread={}", draftId, teamspaceId, Thread.currentThread().getName());
+        log.warn("[DRAFT] generateDraftAsync (IDEA questions) started draftId={} teamspaceId={} thread={}", draftId, teamspaceId, Thread.currentThread().getName());
 
         Draft draft = draftRepository.findById(draftId)
                 .orElseThrow(() -> new IllegalStateException("draft not found: " + draftId));
         Document document = draft.getDocument();
 
         try {
-            log.warn("[DRAFT] calling Gemini draftId={} docType={} apiKeyPrefix={}", draftId, document.getType(),
+            log.warn("[DRAFT] calling Gemini for IDEA questions draftId={} apiKeyPrefix={}", draftId,
                 apiKey != null && apiKey.length() > 8 ? apiKey.substring(0, 8) + "..." : "(empty)");
-            String prompt = buildPrompt(document.getType(), draft.getIdeaContext(), teamspaceName);
+            String prompt = buildIdeaQuestionPrompt(draft.getIdeaContext(), teamspaceName);
+            List<DraftQuestion> questions = callGeminiQuestionsApi(prompt);
+
+            draft.setQuestions(questions);
+            draft.setStatus(DraftStatus.QUESTIONING);
+            log.warn("[DRAFT] QUESTIONING 상태 전환 draftId={} questionCount={}", draftId, questions.size());
+
+            teamspaceEventPublisher.publishDraftQuestioning(teamspaceId, document.getId(), draft.getId(), questions);
+
+        } catch (Exception e) {
+            handleDraftFailure(draft, document, teamspaceId, e);
+        }
+    }
+
+    /**
+     * IDEA 질문에 대한 답변(또는 빈 답변 — 건너뛰기) 제출 후 호출되는 최종 생성 단계.
+     * 원본 아이디어 설명에 Q&A로 확보한 정보를 더해 최종 IDEA 초안을 생성하고,
+     * 완료되면 기존과 동일하게 draft:ready/draft:applied를 발행하고 나머지 문서 초안을 트리거한다.
+     */
+    @Async
+    @Transactional
+    public void generateFinalIdeaDraft(String draftId, String teamspaceId, String teamspaceName) {
+        log.warn("[DRAFT] generateFinalIdeaDraft started draftId={} teamspaceId={} thread={}", draftId, teamspaceId, Thread.currentThread().getName());
+
+        Draft draft = draftRepository.findById(draftId)
+                .orElseThrow(() -> new IllegalStateException("draft not found: " + draftId));
+        Document document = draft.getDocument();
+
+        try {
+            String enrichedContext = mergeIdeaContextWithAnswers(draft.getIdeaContext(), draft.getQuestions(), draft.getAnswers());
+            String prompt = buildPrompt(document.getType(), enrichedContext, teamspaceName);
             String content = callGeminiApi(prompt);
 
             draft.setContent(content);
@@ -77,18 +124,16 @@ public class DraftAsyncExecutor {
 
             teamspaceEventPublisher.publishDraftReady(teamspaceId, document.getId(), draft.getId(), content);
             publishDraftAppliedToDocument(document.getId(), draft.getId(), content);
-            log.warn("[DRAFT] generation complete draftId={}", draftId);
+            log.warn("[DRAFT] IDEA final generation complete draftId={}", draftId);
 
-            if (document.getType() == com.aidea.aidea.domain.documents.entity.DocumentType.IDEA) {
-                final String ideaContent = content;
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        log.warn("[DRAFT] IDEA done - triggering pending drafts teamspaceId={}", teamspaceId);
-                        triggerPendingDraftsWithIdeaContent(teamspaceId, teamspaceName, ideaContent);
-                    }
-                });
-            }
+            final String ideaContent = content;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    log.warn("[DRAFT] IDEA done - triggering pending drafts teamspaceId={}", teamspaceId);
+                    triggerPendingDraftsWithIdeaContent(teamspaceId, teamspaceName, ideaContent);
+                }
+            });
 
         } catch (Exception e) {
             handleDraftFailure(draft, document, teamspaceId, e);
@@ -212,13 +257,7 @@ public class DraftAsyncExecutor {
 
     private String buildPrompt(com.aidea.aidea.domain.documents.entity.DocumentType type,
                                 String ideaContext, String teamspaceName) {
-        String typeInstruction = switch (type) {
-            case IDEA          -> "서비스 아이디어 기획서 (핵심 가치, 타깃 사용자, 차별점 포함)";
-            case PLAN          -> "프로젝트 계획서 (목표, 주요 기능, 개발 단계, 예상 일정 포함)";
-            case USER_SCENARIO -> "유저 시나리오 문서 (주요 사용자 유형, Use Case 3~5개 포함)";
-            case API_SPEC      -> "REST API 명세서 (주요 엔드포인트, 요청/응답 형식 포함)";
-            case ERD           -> "ERD 설명 문서 (주요 엔티티, 핵심 필드, 관계 포함)";
-        };
+        String typeInstruction = type.displayName() + " (" + type.requiredElements() + " 포함)";
 
         String projectSection = (teamspaceName != null && !teamspaceName.isBlank())
                 ? "[PROJECT NAME]\n" + teamspaceName + "\n\n"
@@ -234,8 +273,8 @@ public class DraftAsyncExecutor {
             %s%s[INSTRUCTION]
             - 실제로 채워야 할 내용은 [TODO: 구체적으로 무엇을 써야 하는지] 형태로 표시
             - 이미 알 수 있는 내용(문서 제목, 기본 구조, 아이디어에서 유추 가능한 내용)은 직접 작성
-            - 섹션 제목은 구체적으로 작성
-            - 전체 길이 1000자
+            - 위에서 언급한 핵심 항목을 각각 별도 섹션으로 구성하고, 섹션 제목은 구체적으로 작성
+            - 각 섹션은 200~400자 내외로 작성 (TODO로 표시만 하는 부분은 분량 제한에서 제외)
             """.formatted(typeInstruction, projectSection, ideaSection);
     }
 
@@ -243,9 +282,17 @@ public class DraftAsyncExecutor {
     private static final long RETRY_DELAY_MS = 3_000L;
 
     private String callGeminiApi(String prompt) throws Exception {
+        return callWithRetry(() -> executeGeminiRequest(prompt));
+    }
+
+    private List<DraftQuestion> callGeminiQuestionsApi(String prompt) throws Exception {
+        return callWithRetry(() -> executeIdeaQuestionsRequest(prompt));
+    }
+
+    private <T> T callWithRetry(Callable<T> call) throws Exception {
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                return executeGeminiRequest(prompt);
+                return call.call();
             } catch (HttpClientErrorException e) {
                 throw e; // 4xx는 재시도 불가
             } catch (Exception e) {
@@ -276,7 +323,7 @@ public class DraftAsyncExecutor {
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
                 "generationConfig", Map.of(
-                        "maxOutputTokens", 4096
+                        "maxOutputTokens", 65536
                 )
         );
 
@@ -309,5 +356,139 @@ public class DraftAsyncExecutor {
                 .orElseThrow(() -> new GeminiInvalidResponseException("Gemini text 파트 없음"));
 
         return stripMarkdownFence(raw);
+    }
+
+    // IDEA 초안을 구체화하기 위한 질문 생성 프롬프트 (2단계의 "항상 객관식" 패턴 재사용)
+    private String buildIdeaQuestionPrompt(String ideaContext, String teamspaceName) {
+        String projectSection = (teamspaceName != null && !teamspaceName.isBlank())
+                ? "[PROJECT NAME]\n" + teamspaceName + "\n\n"
+                : "";
+
+        return """
+            [ROLE] 너는 IT 스타트업 기획 컨설턴트야.
+            [CONTEXT]
+            사용자가 새 팀 프로젝트의 아이디어를 짧게 설명했어.
+            이 설명만으로 바로 기획서 초안을 쓰기엔 정보가 부족할 수 있어서,
+            본격적으로 작성하기 전에 더 구체적인 정보를 끌어내는 질문을 먼저 만들려고 해.
+
+            %s[IDEA]
+            %s
+
+            [INSTRUCTION]
+            1. 이 아이디어를 구체화하는 데 꼭 필요한 핵심 정보(%s)를 중심으로 질문 3~5개를 만들어.
+            2. 각 질문은 id(q1, q2 ...), section(어떤 항목에 대한 질문인지), text(질문 내용)와 함께
+               options에 서로 구분되는 구체적인 보기를 3~4개 반드시 포함해.
+            3. 자유 서술형(주관식) 질문은 만들지 마라 — 사용자가 그 중 하나를 고르거나
+               직접 입력할 수 있도록, 보기는 실제로 선택 가능한 구체적인 값으로 작성해.
+
+            [OUTPUT]
+            반드시 JSON 형식. 다른 형식 절대 안 됨.
+            """.formatted(
+                    projectSection,
+                    ideaContext,
+                    com.aidea.aidea.domain.documents.entity.DocumentType.IDEA.requiredElements()
+            );
+    }
+
+    // 2단계에서 확립한 "options 필수 + minItems/maxItems" 스키마 패턴을 그대로 재사용
+    private Map<String, Object> buildIdeaQuestionResponseSchema() {
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "questions", Map.of(
+                                "type", "ARRAY",
+                                "items", Map.of(
+                                        "type", "OBJECT",
+                                        "properties", Map.of(
+                                                "id", Map.of("type", "STRING"),
+                                                "section", Map.of("type", "STRING"),
+                                                "text", Map.of("type", "STRING"),
+                                                "options", Map.of(
+                                                        "type", "ARRAY",
+                                                        "items", Map.of("type", "STRING"),
+                                                        "minItems", 3,
+                                                        "maxItems", 5
+                                                )
+                                        ),
+                                        "required", List.of("id", "section", "text", "options")
+                                ),
+                                "minItems", 3,
+                                "maxItems", 5
+                        )
+                ),
+                "required", List.of("questions")
+        );
+    }
+
+    private record IdeaQuestionsResult(List<DraftQuestion> questions) {}
+
+    private List<DraftQuestion> executeIdeaQuestionsRequest(String prompt) throws Exception {
+        Map<String, Object> requestBody = Map.of(
+                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
+                "generationConfig", Map.of(
+                        "responseMimeType", "application/json",
+                        "responseSchema", buildIdeaQuestionResponseSchema(),
+                        "thinkingConfig", Map.of("thinkingBudget", 1024),
+                        "maxOutputTokens", 65536
+                )
+        );
+
+        String url = geminiBaseUrl + "/models/" + geminiModel + ":generateContent";
+
+        Map response = restClient.post()
+                .uri(url)
+                .header("x-goog-api-key", apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
+                .retrieve()
+                .body(Map.class);
+
+        List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+        if (candidates == null || candidates.isEmpty()) {
+            throw new GeminiInvalidResponseException("Gemini 빈 응답");
+        }
+
+        Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
+        if (content == null) throw new GeminiInvalidResponseException("Gemini content 필드 없음");
+
+        List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
+        if (parts == null || parts.isEmpty()) throw new GeminiInvalidResponseException("Gemini parts 필드 없음");
+
+        String resultJson = parts.stream()
+                .filter(p -> !Boolean.TRUE.equals(p.get("thought")))
+                .map(p -> (String) p.get("text"))
+                .filter(t -> t != null && !t.isBlank())
+                .findFirst()
+                .orElseThrow(() -> new GeminiInvalidResponseException("Gemini text 파트 없음"));
+
+        IdeaQuestionsResult result = objectMapper.readValue(resultJson, IdeaQuestionsResult.class);
+        if (result.questions() == null || result.questions().isEmpty()) {
+            throw new GeminiInvalidResponseException("Gemini가 질문을 생성하지 않음");
+        }
+        return result.questions();
+    }
+
+    // 사용자가 답변을 제출했다면 원본 아이디어 설명에 Q&A 내용을 더해 최종 생성 프롬프트의 컨텍스트로 사용
+    // (답변을 건너뛴 경우 원본 설명만으로 바로 진행 — 기존 buildPrompt를 그대로 재사용하기 위해
+    //  Q&A를 별도 인자로 받지 않고 [IDEA] 컨텍스트 문자열에 합쳐 넣는다)
+    private String mergeIdeaContextWithAnswers(String ideaContext, List<DraftQuestion> questions, List<DraftAnswer> answers) {
+        if (questions == null || answers == null || answers.isEmpty()) {
+            return ideaContext;
+        }
+
+        StringBuilder qa = new StringBuilder();
+        for (DraftQuestion q : questions) {
+            answers.stream()
+                    .filter(a -> a.questionId().equals(q.id()))
+                    .map(DraftAnswer::value)
+                    .filter(v -> v != null && !v.isBlank())
+                    .findFirst()
+                    .ifPresent(value -> qa.append("- ").append(q.text()).append(" → ").append(value).append("\n"));
+        }
+
+        if (qa.isEmpty()) {
+            return ideaContext;
+        }
+        return ideaContext + "\n\n[추가로 확인된 정보]\n" + qa;
     }
 }
