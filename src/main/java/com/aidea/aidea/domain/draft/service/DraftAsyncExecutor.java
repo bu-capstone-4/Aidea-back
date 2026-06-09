@@ -92,7 +92,14 @@ public class DraftAsyncExecutor {
             draft.setStatus(DraftStatus.QUESTIONING);
             log.warn("[DRAFT] QUESTIONING 상태 전환 draftId={} questionCount={}", draftId, questions.size());
 
-            teamspaceEventPublisher.publishDraftQuestioning(teamspaceId, document.getId(), draft.getId(), questions);
+            String dId = draft.getId();
+            List<DraftQuestion> qs = questions;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    teamspaceEventPublisher.publishDraftQuestioning(teamspaceId, document.getId(), dId, qs);
+                }
+            });
 
         } catch (Exception e) {
             handleDraftFailure(draft, document, teamspaceId, e);

@@ -1,0 +1,2 @@
+ALTER TABLE drafts
+    MODIFY COLUMN status VARCHAR(20);
