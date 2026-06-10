@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aidea.aidea.domain.backlog.dto.request.BacklogConfigRequest;
 import com.aidea.aidea.domain.backlog.dto.response.BacklogConfigResponse;
 import com.aidea.aidea.domain.backlog.entity.BacklogConfig;
+import com.aidea.aidea.domain.backlog.entity.BacklogDraftStatus;
 import com.aidea.aidea.domain.backlog.repository.BacklogConfigRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
@@ -26,6 +27,7 @@ public class BacklogConfigService {
     private final BacklogConfigRepository backlogConfigRepository;
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final BacklogEventPublisher eventPublisher;
+    private final BacklogDraftService backlogDraftService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -41,20 +43,37 @@ public class BacklogConfigService {
         TeamspaceMember member = getMemberOrThrow(teamspaceId, userId);
         requireWritePermission(member.getRole());
 
-        BacklogConfig config = backlogConfigRepository.findById(teamspaceId)
+        BacklogConfig existing = backlogConfigRepository.findById(teamspaceId)
                 .orElse(null);
+        boolean isFirstCreation = (existing == null);
 
-        if (config == null) {
-            config = BacklogConfig.create(teamspaceId,
-                    request.feBeEnabled(), request.epicEnabled(), request.storyEnabled(),
-                    request.priorityEnabled(), request.sprintEnabled(), request.dueDateEnabled());
-        } else {
+        if (request.generateDraft() && !isFirstCreation) {
+            throw new CustomException(ErrorCode.BACKLOG_DRAFT_NOT_FIRST_CREATION);
+        }
+
+        BacklogConfig config = isFirstCreation
+                ? BacklogConfig.create(teamspaceId,
+                        request.feBeEnabled(), request.epicEnabled(), request.storyEnabled(),
+                        request.priorityEnabled(), request.sprintEnabled(), request.dueDateEnabled())
+                : existing;
+
+        if (!isFirstCreation) {
             config.update(request.feBeEnabled(), request.epicEnabled(), request.storyEnabled(),
                     request.priorityEnabled(), request.sprintEnabled(), request.dueDateEnabled());
         }
 
-        BacklogConfigResponse response = BacklogConfigResponse.from(backlogConfigRepository.save(config));
+        BacklogConfig saved = backlogConfigRepository.save(config);
+
+        BacklogDraftStatus draftStatus = null;
+        if (isFirstCreation && request.generateDraft()) {
+            draftStatus = backlogDraftService.triggerBacklogDraftGeneration(teamspaceId, userId, saved);
+        }
+
+        BacklogConfigResponse response = BacklogConfigResponse.from(saved, draftStatus);
         broadcastConfigUpdated(teamspaceId, userId, response);
+        if (draftStatus == BacklogDraftStatus.PENDING) {
+            broadcastDraftStarted(teamspaceId, userId);
+        }
         return response;
     }
 
@@ -74,6 +93,18 @@ public class BacklogConfigService {
         payload.put("type", "backlog:config_updated");
         payload.put("actorId", String.valueOf(actorId));
         payload.put("config", config);
+        try {
+            eventPublisher.publishToTeamspace(teamspaceId, String.valueOf(actorId),
+                    objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException e) {
+            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void broadcastDraftStarted(String teamspaceId, Long actorId) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "backlog:draft_started");
+        payload.put("actorId", String.valueOf(actorId));
         try {
             eventPublisher.publishToTeamspace(teamspaceId, String.valueOf(actorId),
                     objectMapper.writeValueAsString(payload));

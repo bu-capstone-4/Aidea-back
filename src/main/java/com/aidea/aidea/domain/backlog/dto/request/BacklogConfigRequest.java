@@ -6,5 +6,6 @@ public record BacklogConfigRequest(
         boolean storyEnabled,
         boolean priorityEnabled,
         boolean sprintEnabled,
-        boolean dueDateEnabled
+        boolean dueDateEnabled,
+        boolean generateDraft
 ) {}
