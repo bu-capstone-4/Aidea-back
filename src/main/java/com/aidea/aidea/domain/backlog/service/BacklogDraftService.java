@@ -49,7 +49,9 @@ public class BacklogDraftService {
             throw new CustomException(ErrorCode.BACKLOG_DRAFT_ALREADY_IN_PROGRESS);
         }
 
-        BacklogDraft draft = BacklogDraft.create(UUID.randomUUID().toString(), teamspaceId);
+        BacklogDraft draft = backlogDraftRepository.findByTeamspaceId(teamspaceId)
+                .orElseGet(() -> BacklogDraft.create(UUID.randomUUID().toString(), teamspaceId));
+        draft.markPending();
         backlogDraftRepository.save(draft);
 
         TeamSpace teamSpace = teamSpaceRepository.findById(teamspaceId)

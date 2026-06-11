@@ -80,7 +80,7 @@ class BacklogDraftAsyncExecutorTest {
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         BacklogDraftAsyncExecutor.TaskDraft taskDraft =
-                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", Priority.HIGH, IssueType.FE, "Sprint 1", "2026-07-01");
+                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", null, "HIGH", "FE", "Sprint 1", "2026-07-01");
         BacklogDraftAsyncExecutor.BacklogDraftResult result =
                 new BacklogDraftAsyncExecutor.BacklogDraftResult(null, null, List.of(taskDraft));
 
@@ -104,13 +104,13 @@ class BacklogDraftAsyncExecutorTest {
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         BacklogDraftAsyncExecutor.TaskDraft taskDraft =
-                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", Priority.HIGH, IssueType.FE, "Sprint 1", "2026-07-01");
+                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", "Story 1", "HIGH", "FE", "Sprint 1", "2026-07-01");
         BacklogDraftAsyncExecutor.StoryDraft storyDraft = new BacklogDraftAsyncExecutor.StoryDraft(
                 "Story 1", "body", Priority.MEDIUM, IssueType.BE, "Sprint 1", "2026-07-01",
-                List.of("Some Epic"), List.of(taskDraft));
+                List.of("Some Epic"));
         BacklogDraftAsyncExecutor.BacklogDraftResult result = new BacklogDraftAsyncExecutor.BacklogDraftResult(
                 List.of(new BacklogDraftAsyncExecutor.EpicDraft("Epic 1", "#123456", "desc")),
-                List.of(storyDraft), null);
+                List.of(storyDraft), List.of(taskDraft));
 
         BacklogDraftAsyncExecutor.BacklogDraftSummary summary =
                 executor.persistBacklogItems(TEAMSPACE_ID, USER_ID, config, result);
@@ -136,11 +136,11 @@ class BacklogDraftAsyncExecutorTest {
         when(taskRepository.save(taskCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
         BacklogDraftAsyncExecutor.TaskDraft taskDraft =
-                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", Priority.HIGH, IssueType.FE, "Sprint 1", "2026-07-01");
+                new BacklogDraftAsyncExecutor.TaskDraft("Task 1", "Story 1", "HIGH", "FE", "Sprint 1", "2026-07-01");
         BacklogDraftAsyncExecutor.StoryDraft storyDraft = new BacklogDraftAsyncExecutor.StoryDraft(
-                "Story 1", "body", Priority.MEDIUM, IssueType.BE, "Sprint 1", "2026-07-01", null, List.of(taskDraft));
+                "Story 1", "body", Priority.MEDIUM, IssueType.BE, "Sprint 1", "2026-07-01", null);
         BacklogDraftAsyncExecutor.BacklogDraftResult result =
-                new BacklogDraftAsyncExecutor.BacklogDraftResult(null, List.of(storyDraft), null);
+                new BacklogDraftAsyncExecutor.BacklogDraftResult(null, List.of(storyDraft), List.of(taskDraft));
 
         executor.persistBacklogItems(TEAMSPACE_ID, USER_ID, config, result);
 

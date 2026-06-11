@@ -148,7 +148,7 @@ public class BacklogDraftAsyncExecutor {
 
         StringBuilder rules = new StringBuilder();
         rules.append("- ").append(config.isStoryEnabled()
-                ? "Story(사용자 스토리) 단위로 작업을 묶고, 각 Story 아래에 Task를 배치해."
+                ? "Story(사용자 스토리) 단위로 작업을 묶어. Task는 stories와 별도로 최상위 tasks 배열에 작성하고, 각 Task의 storyTitle 필드에 소속될 Story의 title과 정확히 동일한 문자열을 입력해."
                 : "Story 없이 독립적인 Task만 생성해.").append("\n");
         rules.append("- ").append(config.isEpicEnabled() && config.isStoryEnabled()
                 ? "관련된 Story들을 Epic(주요 기능 단위)으로 그룹핑해."
@@ -183,13 +183,21 @@ public class BacklogDraftAsyncExecutor {
 
     // ===== 응답 스키마 동적 구성 =====
 
-    private Map<String, Object> commonItemFields(BacklogConfig config) {
+    /**
+     * Gemini structured output 제약(상태 폭발) 완화를 위해, 중첩 배열 안에서 반복되는
+     * 필드(task)는 enum 없이 STRING으로 받고 영속화 시점에 파싱/검증한다.
+     */
+    private Map<String, Object> commonItemFields(BacklogConfig config, boolean useEnums) {
         Map<String, Object> fields = new LinkedHashMap<>();
         if (config.isPriorityEnabled()) {
-            fields.put("priority", Map.of("type", "STRING", "enum", List.of("LOW", "MEDIUM", "HIGH", "URGENT")));
+            fields.put("priority", useEnums
+                    ? Map.of("type", "STRING", "enum", List.of("LOW", "MEDIUM", "HIGH", "URGENT"))
+                    : Map.of("type", "STRING"));
         }
         if (config.isFeBeEnabled()) {
-            fields.put("issueType", Map.of("type", "STRING", "enum", List.of("FE", "BE")));
+            fields.put("issueType", useEnums
+                    ? Map.of("type", "STRING", "enum", List.of("FE", "BE"))
+                    : Map.of("type", "STRING"));
         }
         if (config.isSprintEnabled()) {
             fields.put("sprint", Map.of("type", "STRING"));
@@ -200,14 +208,23 @@ public class BacklogDraftAsyncExecutor {
         return fields;
     }
 
-    private Map<String, Object> taskSchema(BacklogConfig config) {
+    /**
+     * storyEnabled=true일 때는 task가 stories와 별도의 최상위 배열로 분리되므로,
+     * 소속 Story를 가리키는 storyTitle 필드를 함께 받는다 (중첩 배열 깊이를 줄여
+     * "too many states" 에러를 회피하기 위함).
+     */
+    private Map<String, Object> taskSchema(BacklogConfig config, boolean includeStoryTitle) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("title", Map.of("type", "STRING"));
-        props.putAll(commonItemFields(config));
+        if (includeStoryTitle) {
+            props.put("storyTitle", Map.of("type", "STRING"));
+        }
+        props.putAll(commonItemFields(config, false));
+        List<String> required = includeStoryTitle ? List.of("title", "storyTitle") : List.of("title");
         return Map.of(
                 "type", "OBJECT",
                 "properties", props,
-                "required", List.of("title")
+                "required", required
         );
     }
 
@@ -215,20 +232,14 @@ public class BacklogDraftAsyncExecutor {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("title", Map.of("type", "STRING"));
         props.put("body", Map.of("type", "STRING"));
-        props.putAll(commonItemFields(config));
+        props.putAll(commonItemFields(config, true));
         if (config.isEpicEnabled()) {
-            props.put("epicNames", Map.of("type", "ARRAY", "items", Map.of("type", "STRING")));
+            props.put("epicNames", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "maxItems", 3));
         }
-        props.put("tasks", Map.of(
-                "type", "ARRAY",
-                "items", taskSchema(config),
-                "minItems", 1,
-                "maxItems", 5
-        ));
         return Map.of(
                 "type", "OBJECT",
                 "properties", props,
-                "required", List.of("title", "tasks")
+                "required", List.of("title")
         );
     }
 
@@ -251,7 +262,7 @@ public class BacklogDraftAsyncExecutor {
                     "properties", Map.of(
                             "tasks", Map.of(
                                     "type", "ARRAY",
-                                    "items", taskSchema(config),
+                                    "items", taskSchema(config, false),
                                     "minItems", 4,
                                     "maxItems", 15
                             )
@@ -265,20 +276,26 @@ public class BacklogDraftAsyncExecutor {
                 "type", "ARRAY",
                 "items", storySchema(config),
                 "minItems", 4,
-                "maxItems", 12
+                "maxItems", 8
+        ));
+        props.put("tasks", Map.of(
+                "type", "ARRAY",
+                "items", taskSchema(config, true),
+                "minItems", 4,
+                "maxItems", 24
         ));
         if (config.isEpicEnabled()) {
             props.put("epics", Map.of(
                     "type", "ARRAY",
                     "items", epicSchema(),
                     "minItems", 2,
-                    "maxItems", 5
+                    "maxItems", 4
             ));
         }
         return Map.of(
                 "type", "OBJECT",
                 "properties", props,
-                "required", List.of("stories")
+                "required", List.of("stories", "tasks")
         );
     }
 
@@ -422,6 +439,8 @@ public class BacklogDraftAsyncExecutor {
         if (config.isStoryEnabled() && result.stories() != null) {
             long storyNumber = storyRepository.findMaxNumberByTeamspaceId(teamspaceId);
             int storyPosition = currentMaxStoryPosition(teamspaceId);
+            Map<String, Story> storyByTitle = new LinkedHashMap<>();
+            Map<String, Integer> taskPositionByStoryTitle = new LinkedHashMap<>();
             for (StoryDraft s : result.stories()) {
                 Story story = Story.create(++storyNumber, teamspaceId, s.title(), s.body(),
                         StoryStatus.OPEN,
@@ -443,16 +462,24 @@ public class BacklogDraftAsyncExecutor {
 
                 Story savedStory = storyRepository.save(story);
                 storyCount++;
+                storyByTitle.put(s.title(), savedStory);
+                taskPositionByStoryTitle.put(s.title(), 0);
+            }
 
-                if (s.tasks() != null) {
-                    int taskPosition = 0;
-                    for (TaskDraft t : s.tasks()) {
-                        Task task = Task.create(savedStory, t.title(),
-                                config.isFeBeEnabled() ? t.issueType() : null,
-                                null, taskPosition += 1000, actor);
-                        taskRepository.save(task);
-                        taskCount++;
+            if (result.tasks() != null) {
+                for (TaskDraft t : result.tasks()) {
+                    Story story = storyByTitle.get(t.storyTitle());
+                    if (story == null) {
+                        log.warn("[BACKLOG_DRAFT] task의 storyTitle과 일치하는 Story 없음 storyTitle={} taskTitle={}",
+                                t.storyTitle(), t.title());
+                        continue;
                     }
+                    int position = taskPositionByStoryTitle.merge(t.storyTitle(), 1000, Integer::sum);
+                    Task task = Task.create(story, t.title(),
+                            config.isFeBeEnabled() ? parseIssueType(t.issueType()) : null,
+                            null, position, actor);
+                    taskRepository.save(task);
+                    taskCount++;
                 }
             }
         } else if (result.tasks() != null) {
@@ -461,8 +488,8 @@ public class BacklogDraftAsyncExecutor {
             for (TaskDraft t : result.tasks()) {
                 Task task = Task.createStandalone(teamspaceId, ++taskNumber, t.title(),
                         StoryStatus.OPEN,
-                        config.isPriorityEnabled() ? t.priority() : null,
-                        config.isFeBeEnabled() ? t.issueType() : null,
+                        config.isPriorityEnabled() ? parsePriority(t.priority()) : null,
+                        config.isFeBeEnabled() ? parseIssueType(t.issueType()) : null,
                         config.isSprintEnabled() ? t.sprint() : null,
                         null, actor,
                         config.isDueDateEnabled() ? parseDueDate(t.dueDate()) : null,
@@ -492,6 +519,30 @@ public class BacklogDraftAsyncExecutor {
 
     private String normalizeColor(String color) {
         return (color != null && HEX_COLOR_PATTERN.matcher(color).matches()) ? color : DEFAULT_EPIC_COLOR;
+    }
+
+    private Priority parsePriority(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Priority.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[BACKLOG_DRAFT] priority 파싱 실패 value={}", value);
+            return null;
+        }
+    }
+
+    private IssueType parseIssueType(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return IssueType.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[BACKLOG_DRAFT] issueType 파싱 실패 value={}", value);
+            return null;
+        }
     }
 
     private LocalDate parseDueDate(String dueDate) {
@@ -549,7 +600,7 @@ public class BacklogDraftAsyncExecutor {
     record EpicDraft(String name, String color, String description) {}
 
     record StoryDraft(String title, String body, Priority priority, IssueType issueType,
-                      String sprint, String dueDate, List<String> epicNames, List<TaskDraft> tasks) {}
+                      String sprint, String dueDate, List<String> epicNames) {}
 
-    record TaskDraft(String title, Priority priority, IssueType issueType, String sprint, String dueDate) {}
+    record TaskDraft(String title, String storyTitle, String priority, String issueType, String sprint, String dueDate) {}
 }

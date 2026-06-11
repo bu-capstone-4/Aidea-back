@@ -61,4 +61,10 @@ public class BacklogDraft {
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
     }
+
+    public void markPending() {
+        this.status = BacklogDraftStatus.PENDING;
+        this.errorCode = null;
+        this.errorMessage = null;
+    }
 }
