@@ -24,6 +24,14 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     """)
     List<Object[]> findTaskCountsByTeamspaceId(@Param("teamspaceId") String teamspaceId);
 
+    @Query("""
+        SELECT t.linkedStory.id, COUNT(t), SUM(CASE WHEN t.status IN (com.aidea.aidea.domain.backlog.entity.StoryStatus.DONE, com.aidea.aidea.domain.backlog.entity.StoryStatus.CLOSED) THEN 1 ELSE 0 END)
+        FROM Task t
+        WHERE t.teamspaceId = :teamspaceId AND t.linkedStory IS NOT NULL
+        GROUP BY t.linkedStory.id
+    """)
+    List<Object[]> findLinkedTaskCountsByTeamspaceId(@Param("teamspaceId") String teamspaceId);
+
     @Query("SELECT t FROM Task t LEFT JOIN FETCH t.assignee LEFT JOIN FETCH t.reporter LEFT JOIN FETCH t.linkedStory WHERE t.teamspaceId = :teamspaceId AND t.story IS NULL ORDER BY t.position ASC")
     List<Task> findStandaloneByTeamspaceId(@Param("teamspaceId") String teamspaceId);
 

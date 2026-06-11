@@ -97,7 +97,7 @@ public class DraftAsyncExecutor {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    teamspaceEventPublisher.publishDraftQuestioning(teamspaceId, document.getId(), dId, qs);
+                    publishDraftQuestioningSafely(teamspaceId, document.getId(), dId, qs);
                 }
             });
 
@@ -129,7 +129,7 @@ public class DraftAsyncExecutor {
             draft.setStatus(DraftStatus.DONE);
             document.setStatus(DocumentAiStatus.IDLE);
 
-            teamspaceEventPublisher.publishDraftReady(teamspaceId, document.getId(), draft.getId(), content);
+            publishDraftReadySafely(teamspaceId, document.getId(), draft.getId(), content);
             publishDraftAppliedToDocument(document.getId(), draft.getId(), content);
             log.warn("[DRAFT] IDEA final generation complete draftId={}", draftId);
 
@@ -175,7 +175,7 @@ public class DraftAsyncExecutor {
             draft.setStatus(DraftStatus.DONE);
             document.setStatus(DocumentAiStatus.IDLE);
 
-            teamspaceEventPublisher.publishDraftReady(teamspaceId, document.getId(), draft.getId(), content);
+            publishDraftReadySafely(teamspaceId, document.getId(), draft.getId(), content);
             publishDraftAppliedToDocument(document.getId(), draft.getId(), content);
             log.warn("[DRAFT] pending draft complete draftId={}", draftId);
 
@@ -198,8 +198,32 @@ public class DraftAsyncExecutor {
         document.setStatus(DocumentAiStatus.IDLE);
 
         log.warn("[DRAFT] publishing draft:error draftId={} teamspaceId={} errorCode={}", draft.getId(), teamspaceId, errorCode.getCode());
-        teamspaceEventPublisher.publishDraftError(teamspaceId, document.getId(), errorCode.getCode());
+        publishDraftErrorSafely(teamspaceId, document.getId(), errorCode.getCode());
         publishDraftErrorToDocument(document.getId(), errorCode.getCode());
+    }
+
+    private void publishDraftQuestioningSafely(String teamspaceId, String documentId, String draftId, List<DraftQuestion> questions) {
+        try {
+            teamspaceEventPublisher.publishDraftQuestioning(teamspaceId, documentId, draftId, questions);
+        } catch (Exception e) {
+            log.error("[DRAFT] failed to publish draft:questioning teamspaceId={} documentId={}", teamspaceId, documentId, e);
+        }
+    }
+
+    private void publishDraftReadySafely(String teamspaceId, String documentId, String draftId, String content) {
+        try {
+            teamspaceEventPublisher.publishDraftReady(teamspaceId, documentId, draftId, content);
+        } catch (Exception e) {
+            log.error("[DRAFT] failed to publish draft:ready teamspaceId={} documentId={}", teamspaceId, documentId, e);
+        }
+    }
+
+    private void publishDraftErrorSafely(String teamspaceId, String documentId, String errorCode) {
+        try {
+            teamspaceEventPublisher.publishDraftError(teamspaceId, documentId, errorCode);
+        } catch (Exception e) {
+            log.error("[DRAFT] failed to publish draft:error teamspaceId={} documentId={}", teamspaceId, documentId, e);
+        }
     }
 
     private ErrorCode classifyException(Exception e) {
