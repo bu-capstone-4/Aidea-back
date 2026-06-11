@@ -90,6 +90,12 @@ public class BacklogWebSocketHandler extends TextWebSocketHandler implements Bac
                         (Long) row[0],
                         new int[]{((Number) row[1]).intValue(), ((Number) row[2]).intValue()}
                 ));
+        taskRepository.findLinkedTaskCountsByTeamspaceId(teamspaceId)
+                .forEach(row -> taskCounts.merge(
+                        (Long) row[0],
+                        new int[]{((Number) row[1]).intValue(), ((Number) row[2]).intValue()},
+                        (existing, linked) -> new int[]{existing[0] + linked[0], existing[1] + linked[1]}
+                ));
 
         List<StorySummaryResponse> stories = storyRepository.findAllWithRelationsByTeamspaceId(teamspaceId)
                 .stream()

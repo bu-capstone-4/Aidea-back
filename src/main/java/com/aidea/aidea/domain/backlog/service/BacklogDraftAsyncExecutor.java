@@ -440,7 +440,6 @@ public class BacklogDraftAsyncExecutor {
             long storyNumber = storyRepository.findMaxNumberByTeamspaceId(teamspaceId);
             int storyPosition = currentMaxStoryPosition(teamspaceId);
             Map<String, Story> storyByTitle = new LinkedHashMap<>();
-            Map<String, Integer> taskPositionByStoryTitle = new LinkedHashMap<>();
             for (StoryDraft s : result.stories()) {
                 Story story = Story.create(++storyNumber, teamspaceId, s.title(), s.body(),
                         StoryStatus.OPEN,
@@ -463,10 +462,11 @@ public class BacklogDraftAsyncExecutor {
                 Story savedStory = storyRepository.save(story);
                 storyCount++;
                 storyByTitle.put(s.title(), savedStory);
-                taskPositionByStoryTitle.put(s.title(), 0);
             }
 
             if (result.tasks() != null) {
+                long taskNumber = taskRepository.findMaxStandaloneNumberByTeamspaceId(teamspaceId);
+                int taskPosition = currentMaxStandaloneTaskPosition(teamspaceId);
                 for (TaskDraft t : result.tasks()) {
                     Story story = storyByTitle.get(t.storyTitle());
                     if (story == null) {
@@ -474,10 +474,15 @@ public class BacklogDraftAsyncExecutor {
                                 t.storyTitle(), t.title());
                         continue;
                     }
-                    int position = taskPositionByStoryTitle.merge(t.storyTitle(), 1000, Integer::sum);
-                    Task task = Task.create(story, t.title(),
+                    Task task = Task.createStandalone(teamspaceId, ++taskNumber, t.title(),
+                            StoryStatus.OPEN,
+                            config.isPriorityEnabled() ? parsePriority(t.priority()) : null,
                             config.isFeBeEnabled() ? parseIssueType(t.issueType()) : null,
-                            null, position, actor);
+                            config.isSprintEnabled() ? t.sprint() : null,
+                            null, actor,
+                            config.isDueDateEnabled() ? parseDueDate(t.dueDate()) : null,
+                            taskPosition += 1000);
+                    task.linkToStory(story);
                     taskRepository.save(task);
                     taskCount++;
                 }
