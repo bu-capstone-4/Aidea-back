@@ -24,6 +24,7 @@ public enum ErrorCode {
     NOT_TEAMSPACE_OWNER(HttpStatus.FORBIDDEN, "NOT_TEAMSPACE_OWNER", "팀스페이스 소유자만 가능합니다."),
     NOT_TEAMSPACE_MEMBER(HttpStatus.FORBIDDEN, "NOT_TEAMSPACE_MEMBER", "팀스페이스 소속이 아닙니다."),
     INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, "INSUFFICIENT_PERMISSION", "권한이 없습니다."),
+    TEAMSPACE_LAST_OWNER(HttpStatus.CONFLICT, "TEAMSPACE_LAST_OWNER", "팀스페이스에는 최소 1명의 Owner가 있어야 합니다."),
 
     // ===== 문서 (Document) =====
     DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "문서를 찾을 수 없습니다."),

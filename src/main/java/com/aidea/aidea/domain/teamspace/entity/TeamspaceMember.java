@@ -24,4 +24,8 @@ public class TeamspaceMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private MemberRole role;
+
+    public void changeRole(MemberRole role) {
+        this.role = role;
+    }
 }

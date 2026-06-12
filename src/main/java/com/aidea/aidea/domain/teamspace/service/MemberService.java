@@ -11,6 +11,8 @@ import com.aidea.aidea.domain.teamspace.entity.TeamspaceMember;
 import com.aidea.aidea.domain.teamspace.repository.TeamspaceMemberRepository;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
+import com.aidea.aidea.global.util.TeamspaceRoleValidator;
+import com.aidea.aidea.global.websocket.MemberRoleChangeListener;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,8 @@ public class MemberService {
     private final TeamspaceMemberRepository teamspaceMemberRepository;
     private final InvitationRepository invitationRepository;
     private final UserRepository userRepository;
+    private final TeamspaceRoleValidator roleValidator;
+    private final List<MemberRoleChangeListener> roleChangeListeners;
 
     @Transactional(readOnly = true)
     public List<MemberInfoResponse> getMembers(String teamspaceId, Long userId) {
@@ -101,12 +105,47 @@ public class MemberService {
         TeamspaceMember target = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, memberId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
 
-        // OWNER는 추방 불가
-        if (target.getRole() == MemberRole.OWNER) {
-            throw new CustomException(ErrorCode.INSUFFICIENT_PERMISSION);
-        }
+        // 팀스페이스의 마지막 OWNER는 추방 불가
+        assertNotLastOwner(teamspaceId, target);
 
         teamspaceMemberRepository.delete(target);
+    }
+
+    @Transactional
+    public MemberInfoResponse changeMemberRole(String teamspaceId, Long targetUserId, MemberRole newRole, Long userId) {
+        // 호출자 OWNER 확인
+        roleValidator.requireRole(teamspaceId, userId, MemberRole.OWNER);
+
+        // 대상 멤버 조회
+        TeamspaceMember target = teamspaceMemberRepository.findByTeamspaceIdAndUserId(teamspaceId, targetUserId)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_TEAMSPACE_MEMBER));
+
+        if (target.getRole() != newRole) {
+            // 마지막 OWNER는 강등 불가
+            assertNotLastOwner(teamspaceId, target);
+            target.changeRole(newRole);
+
+            for (MemberRoleChangeListener listener : roleChangeListeners) {
+                listener.onMemberRoleChanged(teamspaceId, targetUserId, newRole);
+            }
+        }
+
+        User user = userRepository.findById(targetUserId).orElse(null);
+        return MemberInfoResponse.builder()
+                .userId(target.getUserId())
+                .name(user != null ? user.getName() : null)
+                .email(user != null ? user.getEmail() : null)
+                .role(target.getRole().name())
+                .status("ACTIVE")
+                .profileImageUrl(user != null ? user.getProfileImageUrl() : null)
+                .build();
+    }
+
+    private void assertNotLastOwner(String teamspaceId, TeamspaceMember target) {
+        if (target.getRole() == MemberRole.OWNER
+                && teamspaceMemberRepository.countByTeamspaceIdAndRole(teamspaceId, MemberRole.OWNER) <= 1) {
+            throw new CustomException(ErrorCode.TEAMSPACE_LAST_OWNER);
+        }
     }
 
     @Transactional

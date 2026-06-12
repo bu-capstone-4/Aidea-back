@@ -6,6 +6,7 @@ import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
 import com.aidea.aidea.domain.teamspace.repository.TeamSpaceRepository;
 import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
+import com.aidea.aidea.global.websocket.MemberRoleChangeListener;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class TeamspaceWebSocketHandler extends TextWebSocketHandler
-        implements TeamspaceEventPublisher {
+        implements TeamspaceEventPublisher, MemberRoleChangeListener {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> teamspaceSessions
             = new ConcurrentHashMap<>();
@@ -192,6 +193,21 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler
                 "questions", questions
         );
         publishEvent(teamspaceId, "draft:questioning", data);
+    }
+
+    @Override
+    public void onMemberRoleChanged(String teamspaceId, Long userId, MemberRole newRole) {
+        Set<WebSocketSession> sessions = teamspaceSessions.getOrDefault(teamspaceId, Collections.emptySet());
+
+        // 대상 유저의 모든 탭(세션)에 캐시된 role 갱신
+        for (WebSocketSession s : sessions) {
+            if (userId.toString().equals(s.getAttributes().get("userId"))) {
+                s.getAttributes().put("role", newRole);
+            }
+        }
+
+        log.info("[WS-TS] member:role_changed teamspaceId={} userId={} newRole={}", teamspaceId, userId, newRole);
+        publishEvent(teamspaceId, "member:role_changed", Map.of("userId", userId, "role", newRole.name()));
     }
 
     private void publishEvent(String teamspaceId, String eventType, Map<String, Object> data) {
