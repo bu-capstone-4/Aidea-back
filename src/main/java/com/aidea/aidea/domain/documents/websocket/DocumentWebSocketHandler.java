@@ -10,6 +10,7 @@ import com.aidea.aidea.domain.documents.service.DocumentService;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
+import com.aidea.aidea.global.websocket.MemberRoleChangeListener;
 import com.aidea.aidea.global.websocket.SocketErrorCode;
 import com.aidea.aidea.global.websocket.SocketErrorSender;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher, DraftEventPublisher {
+public class DocumentWebSocketHandler extends TextWebSocketHandler implements FeedbackEventPublisher, DraftEventPublisher, MemberRoleChangeListener {
 
     private final ConcurrentHashMap<String, Set<WebSocketSession>> docSessions
             = new ConcurrentHashMap<>();
@@ -313,6 +314,21 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
                     s.sendMessage(message);
                 } catch (IOException e) {
                     log.warn("[WS] publishDraftToDocument failed sessionId={} docId={}", s.getId(), documentId);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onMemberRoleChanged(String teamspaceId, Long userId, MemberRole newRole) {
+        String userIdStr = userId.toString();
+        for (Set<WebSocketSession> sessions : docSessions.values()) {
+            for (WebSocketSession s : sessions) {
+                Map<String, Object> attrs = s.getAttributes();
+                if (teamspaceId.equals(attrs.get("teamspaceId")) && userIdStr.equals(attrs.get("userId"))) {
+                    attrs.put("role", newRole);
+                    log.info("[WS] role cache updated sessionId={} docId={} userId={} newRole={}",
+                            s.getId(), attrs.get("docId"), userId, newRole);
                 }
             }
         }

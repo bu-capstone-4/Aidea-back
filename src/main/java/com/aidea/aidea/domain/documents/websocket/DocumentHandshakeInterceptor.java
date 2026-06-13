@@ -70,6 +70,7 @@ public class DocumentHandshakeInterceptor implements HandshakeInterceptor {
         attributes.put("docId", docId);
         attributes.put("userId", userId.toString());
         attributes.put("role", member.get().getRole());
+        attributes.put("teamspaceId", doc.getTeamspace().getTeamspaceId());
 
         log.info("[WS] handshake accepted userId={} docId={} role={}", userId, docId, member.get().getRole());
         return true;
