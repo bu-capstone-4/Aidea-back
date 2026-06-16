@@ -5,7 +5,8 @@ public enum DocumentType {
     PLAN,
     USER_SCENARIO,
     API_SPEC,
-    ERD;
+    ERD,
+    FREE;
 
     // AI 프롬프트에 주입할 문서 종류 한글 명칭
     public String displayName() {
@@ -15,6 +16,7 @@ public enum DocumentType {
             case USER_SCENARIO -> "유저 시나리오 문서";
             case API_SPEC -> "REST API 명세서";
             case ERD -> "ERD 설명 문서";
+            case FREE -> "자유 편집 문서";
         };
     }
 
@@ -26,6 +28,11 @@ public enum DocumentType {
             case USER_SCENARIO -> "주요 사용자 유형, Use Case별 진행 흐름(최소 3개), 예외/대안 흐름";
             case API_SPEC -> "주요 엔드포인트(HTTP 메서드+경로), 요청/응답 필드와 타입, 인증·에러 처리 방식";
             case ERD -> "주요 엔티티 목록, 엔티티별 핵심 필드와 타입, 엔티티 간 관계(1:N, N:M 등)";
+            case FREE -> "";
         };
+    }
+
+    public boolean supportsDraftGeneration() {
+        return this != FREE;
     }
 }

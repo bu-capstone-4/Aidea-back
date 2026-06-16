@@ -38,6 +38,11 @@ public class DraftService {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
 
+        if (!document.getType().supportsDraftGeneration()) {
+            log.warn("[DRAFT] skip savePendingDraft — type does not support draft documentId={} type={}", documentId, document.getType());
+            return;
+        }
+
         if (draftRepository.existsByDocumentIdAndStatus(documentId, DraftStatus.PENDING)) {
             return;
         }
@@ -55,6 +60,11 @@ public class DraftService {
 
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DOCUMENT_NOT_FOUND));
+
+        if (!document.getType().supportsDraftGeneration()) {
+            log.warn("[DRAFT] skip triggerDraftGeneration — type does not support draft documentId={} type={}", documentId, document.getType());
+            return;
+        }
 
         if (draftRepository.existsByDocumentIdAndStatus(documentId, DraftStatus.PENDING)) {
             log.warn("[DRAFT] skip - already PENDING documentId={}", documentId);
