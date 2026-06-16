@@ -57,7 +57,7 @@ public class DocumentService {
                 .orElseThrow(() -> new CustomException(ErrorCode.TEAMSPACE_NOT_FOUND));
 
         String title = (req.getTitle() == null || req.getTitle().isBlank())
-                ? req.getType().name()
+                ? (req.getType() == DocumentType.FREE ? "새 문서" : req.getType().name())
                 : req.getTitle();
 
         Document doc = Document.create(UUID.randomUUID().toString(), teamspace, req.getType(), title);

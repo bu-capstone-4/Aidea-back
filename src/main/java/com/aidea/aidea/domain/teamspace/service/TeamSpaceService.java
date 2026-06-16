@@ -85,6 +85,10 @@ public class TeamSpaceService {
                     .orElse(null);
 
             savedDocuments.forEach(doc -> {
+                if (!doc.getType().supportsDraftGeneration()) {
+                    log.warn("[TS] skip draft — type does not support draft docId={} type={}", doc.getId(), doc.getType());
+                    return;
+                }
                 if (ideaDoc != null && doc.getId().equals(ideaDoc.getId())) {
                     log.warn("[TS] triggering idea draft docId={} teamspaceId={}", doc.getId(), saved.getTeamspaceId());
                     draftService.triggerDraftGeneration(doc.getId(), ideaContext, teamspaceName);
