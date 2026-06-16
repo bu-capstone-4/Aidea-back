@@ -98,10 +98,10 @@ components:
           example: "개발팀의 기획 문서 작성을 돕는 AI 기반 협업 도구"
         documents:
           type: array
-          description: "생성할 문서 타입 목록 (IDEA는 필수, 해제 불가)"
+          description: "생성할 문서 타입 목록 (IDEA는 필수, 해제 불가 / FREE는 초안 생성 없이 빈 문서로 생성됨)"
           items:
             type: string
-            enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD]
+            enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD, FREE]
           example: ["IDEA", "PLAN", "USER_SCENARIO", "API_SPEC", "ERD"]
 
     TeamspaceSummary:
@@ -193,7 +193,7 @@ components:
           type: string
         type:
           type: string
-          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD]
+          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD, FREE]
         title:
           type: string
         updatedAt:
@@ -212,7 +212,7 @@ components:
           type: string
         type:
           type: string
-          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD]
+          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD, FREE]
         title:
           type: string
         yjsBinary:
@@ -234,10 +234,10 @@ components:
           type: string
         type:
           type: string
-          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD]
+          enum: [IDEA, PLAN, USER_SCENARIO, API_SPEC, ERD, FREE]
         title:
           type: string
-          description: "문서 제목 (미입력 시 type 기반 기본값)"
+          description: "문서 제목 (미입력 시 type 기반 기본값 / FREE 타입은 '새 문서')"
 
     TeamspaceUpdateRequest:
       type: object

@@ -272,6 +272,10 @@ public class GeminiService {
 
     //Gemini에게 줄 첫 명령서 작성
     private String buildInitialPrompt(String originalMarkdown, String additionalRequest, String ideaMarkdown, DocumentType documentType) {
+        if (documentType == DocumentType.FREE) {
+            return buildFreeInitialPrompt(originalMarkdown, additionalRequest, ideaMarkdown);
+        }
+
         String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
                 ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
                 : "";
@@ -317,6 +321,48 @@ public class GeminiService {
         );
     }
 
+    // FREE 타입 전용 1차 프롬프트
+    // 정해진 양식이 없으므로 요구사항 유무가 QUESTIONS/FEEDBACK 분기의 1차 기준
+    private String buildFreeInitialPrompt(String originalMarkdown, String additionalRequest, String ideaMarkdown) {
+        String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
+                ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
+                : "";
+        String request = (additionalRequest != null && !additionalRequest.isBlank()) ? additionalRequest : "";
+        return """
+            [ROLE]
+            너는 문서 검토 전문 컨설턴트야.
+
+            [CONTEXT]
+            이 문서는 미리 정해진 양식이 없는 자유 편집 문서야.
+            어떤 방향으로 개선할지는 사용자의 요구사항에서 판단해야 해.
+
+            %s[DOCUMENT]
+            %s
+
+            [ADDITIONAL REQUEST]
+            %s
+
+            [INSTRUCTION]
+            1. [ADDITIONAL REQUEST]가 구체적인 개선 방향을 담고 있으면 → type="FEEDBACK"
+               - [IDEA DOCUMENT]가 있으면 아이디어 방향성을 참고해서 수정안 작성
+               - 요구사항이 의도한 방향을 해치지 말 것
+               - 분량은 섹션별로 원본 대비 최대 1.5배 이내 — 핵심만 보강
+               - type="FEEDBACK", revisedMarkdown에 개선된 마크다운 작성
+            2. [ADDITIONAL REQUEST]가 없거나 너무 모호하면 → 반드시 type="QUESTIONS"
+               - 문서를 어떤 목적/방향으로 개선할지 파악하기 위한 질문 3~5개 생성
+               - 각 질문은 id(q1, q2 ...), section(어떤 측면인지), text(질문 내용)와 함께
+                 options에 구체적인 보기를 3~4개 반드시 포함해
+               - 자유 서술형(주관식) 질문은 만들지 마라 — 선택 가능한 구체적인 값으로 작성해
+
+            [OUTPUT]
+            반드시 JSON 형식. 다른 형식 절대 안 됨.
+            """.formatted(
+                ideaSection,
+                originalMarkdown,
+                request.isBlank() ? "없음" : request
+        );
+    }
+
     //답변 포함된 두 번째 명령서 작성
     private String buildAnswerPrompt(
             String originalMarkdown,
@@ -326,6 +372,10 @@ public class GeminiService {
             String ideaMarkdown,
             DocumentType documentType
     ) {
+        if (documentType == DocumentType.FREE) {
+            return buildFreeAnswerPrompt(originalMarkdown, questions, answers, additionalRequest, ideaMarkdown);
+        }
+
         String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
                 ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
                 : "";
@@ -372,6 +422,64 @@ public class GeminiService {
             """.formatted(
                 documentType.displayName(),
                 documentType.requiredElements(),
+                ideaSection,
+                originalMarkdown,
+                qa.toString(),
+                additionalRequest != null ? additionalRequest : "없음"
+        );
+    }
+
+    // FREE 타입 전용 2차 프롬프트 (Q&A 답변 수신 후 FEEDBACK 생성)
+    private String buildFreeAnswerPrompt(
+            String originalMarkdown,
+            List<Question> questions,
+            List<Answer> answers,
+            String additionalRequest,
+            String ideaMarkdown
+    ) {
+        String ideaSection = (ideaMarkdown != null && !ideaMarkdown.isBlank())
+                ? "[IDEA DOCUMENT]\n" + ideaMarkdown + "\n\n"
+                : "";
+
+        StringBuilder qa = new StringBuilder();
+        for (Question q : questions) {
+            String matchedAnswer = answers.stream()
+                    .filter(a -> a.questionId().equals(q.id()))
+                    .map(Answer::value)
+                    .findFirst()
+                    .orElse("(답변 없음)");
+            qa.append("- Q: ").append(q.text())
+                    .append(" → A: ").append(matchedAnswer).append("\n");
+        }
+
+        return """
+            [ROLE]
+            너는 문서 검토 전문 컨설턴트야.
+
+            [CONTEXT]
+            이 문서는 미리 정해진 양식이 없는 자유 편집 문서야.
+            이전에 개선 방향을 파악하기 위한 질문을 했고, 사용자의 답변을 받았어.
+            답변에서 확인된 목적과 방향에 맞게 수정안을 작성해.
+
+            %s[ORIGINAL DOCUMENT]
+            %s
+
+            [QUESTIONS AND ANSWERS]
+            %s
+
+            [ADDITIONAL REQUEST]
+            %s
+
+            [INSTRUCTION]
+            - [IDEA DOCUMENT]가 있으면 아이디어 방향성을 참고해서 수정안 작성
+            - 답변에서 확인된 목적과 방향에 맞게 원본 문서를 개선해
+            - 사용자가 답하지 않은 영역은 추측하지 말고 기존 내용 유지
+            - 분량은 섹션별로 원본 대비 최대 1.5배 이내 — 핵심만 보강
+            - type="FEEDBACK"으로 응답, revisedMarkdown에 마크다운
+
+            [OUTPUT]
+            반드시 JSON 형식.
+            """.formatted(
                 ideaSection,
                 originalMarkdown,
                 qa.toString(),
