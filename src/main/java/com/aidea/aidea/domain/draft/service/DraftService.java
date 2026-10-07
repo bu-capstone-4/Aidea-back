@@ -95,7 +95,8 @@ public class DraftService {
 
     @Transactional
     public DraftAnswerResponse submitDraftAnswer(String draftId, DraftAnswerRequest request, Long userId) {
-        Draft draft = draftRepository.findById(draftId)
+        // 동시 제출 시 둘 다 QUESTIONING을 읽고 통과하지 않도록 행을 잠그고 상태를 확인한다
+        Draft draft = draftRepository.findByIdForUpdate(draftId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DRAFT_NOT_FOUND));
 
         Document document = draft.getDocument();

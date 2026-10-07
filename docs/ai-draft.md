@@ -187,7 +187,7 @@ Document 생성 직후 (null)
 
 ### 4-5-1. IDEA 질문 답변 제출 (`POST /api/drafts/{draftId}/answers`)
 
-1. 권한(OWNER/MEMBER) 확인, 상태가 `QUESTIONING`이 아니면 `DRAFT_INVALID_STATUS`
+1. Draft를 행 잠금(`SELECT … FOR UPDATE`)으로 조회, 권한(OWNER/MEMBER) 확인, 상태가 `QUESTIONING`이 아니면 `DRAFT_INVALID_STATUS` (팀원 동시 제출 시 늦은 쪽은 앞선 커밋 후 ANSWERING을 읽어 여기서 거절)
 2. 답변 저장(빈 배열이면 건너뛰기), `status = ANSWERING`
 3. `QaUpdateBuffer.clear(docId)` — 작성 중이던 답변 Y.Doc 업데이트 버퍼 정리
 4. 트랜잭션 커밋 후 **팀스페이스 소켓** `draft:answering` 발행 → `generateFinalIdeaDraft` 비동기 호출

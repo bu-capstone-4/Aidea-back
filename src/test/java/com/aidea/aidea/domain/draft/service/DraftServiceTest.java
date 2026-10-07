@@ -82,7 +82,7 @@ class DraftServiceTest {
     @Test
     void submitDraftAnswer_clearsQaBufferAndPublishesAnsweringAfterCommit() {
         Draft draft = draftWithStatus(DraftStatus.QUESTIONING);
-        when(draftRepository.findById(DRAFT_ID)).thenReturn(Optional.of(draft));
+        when(draftRepository.findByIdForUpdate(DRAFT_ID)).thenReturn(Optional.of(draft));
         TransactionSynchronizationManager.initSynchronization();
 
         service.submitDraftAnswer(DRAFT_ID, new DraftAnswerRequest(List.of(
@@ -102,7 +102,7 @@ class DraftServiceTest {
     @Test
     void submitDraftAnswer_throwsAndPublishesNothing_whenNotQuestioning() {
         Draft draft = draftWithStatus(DraftStatus.ANSWERING);
-        when(draftRepository.findById(DRAFT_ID)).thenReturn(Optional.of(draft));
+        when(draftRepository.findByIdForUpdate(DRAFT_ID)).thenReturn(Optional.of(draft));
 
         assertThatThrownBy(() -> service.submitDraftAnswer(DRAFT_ID, new DraftAnswerRequest(List.of()), 1L))
                 .isInstanceOf(CustomException.class)

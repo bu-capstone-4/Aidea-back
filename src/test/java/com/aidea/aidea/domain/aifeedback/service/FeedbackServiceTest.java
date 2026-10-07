@@ -88,7 +88,7 @@ class FeedbackServiceTest {
     @Test
     void submitAnswer_switchesToAnswering_clearsBuffer_andPublishesAnsweringAfterCommit() throws Exception {
         Feedback feedback = feedbackWithStatus(FeedbackStatus.QUESTIONING);
-        when(feedbackRepository.findById(FEEDBACK_ID)).thenReturn(Optional.of(feedback));
+        when(feedbackRepository.findByIdForUpdate(FEEDBACK_ID)).thenReturn(Optional.of(feedback));
         TransactionSynchronizationManager.initSynchronization();
 
         service.submitAnswer(FEEDBACK_ID, answerRequest(), 1L);
@@ -112,7 +112,7 @@ class FeedbackServiceTest {
     @Test
     void submitAnswer_throwsInvalidStatus_whenNotQuestioning() {
         Feedback feedback = feedbackWithStatus(FeedbackStatus.ANSWERING);
-        when(feedbackRepository.findById(FEEDBACK_ID)).thenReturn(Optional.of(feedback));
+        when(feedbackRepository.findByIdForUpdate(FEEDBACK_ID)).thenReturn(Optional.of(feedback));
 
         assertThatThrownBy(() -> service.submitAnswer(FEEDBACK_ID, answerRequest(), 1L))
                 .isInstanceOf(CustomException.class)

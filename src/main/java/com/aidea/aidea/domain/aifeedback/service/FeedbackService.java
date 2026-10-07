@@ -131,7 +131,9 @@ public class FeedbackService {
 
     @Transactional
     public FeedbackIdResponse submitAnswer(String feedbackId, AnswerRequest request, Long userId) {
-        Feedback feedback = feedbackRepository.findById(feedbackId)
+        // 팀원들이 같은 답변을 함께 작성해 동시에 제출할 수 있으므로 행을 잠그고 상태를 확인한다.
+        // 늦게 들어온 요청은 앞선 커밋 후 ANSWERING을 읽어 FEEDBACK_INVALID_STATUS로 거절된다.
+        Feedback feedback = feedbackRepository.findByIdForUpdate(feedbackId)
                 .orElseThrow(() -> new CustomException(ErrorCode.FEEDBACK_NOT_FOUND));
 
         roleValidator.requireRole(feedback.getDocument().getTeamspace().getTeamspaceId(), userId, MemberRole.OWNER, MemberRole.MEMBER);
