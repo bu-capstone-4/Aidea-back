@@ -196,6 +196,12 @@ public class TeamspaceWebSocketHandler extends TextWebSocketHandler
     }
 
     @Override
+    public void publishDraftAnswering(String teamspaceId, String documentId, String draftId) {
+        log.warn("[WS-TS] publishDraftAnswering teamspaceId={} documentId={} draftId={}", teamspaceId, documentId, draftId);
+        publishEvent(teamspaceId, "draft:answering", Map.of("documentId", documentId, "draftId", draftId));
+    }
+
+    @Override
     public void onMemberRoleChanged(String teamspaceId, Long userId, MemberRole newRole) {
         Set<WebSocketSession> sessions = teamspaceSessions.getOrDefault(teamspaceId, Collections.emptySet());
 

@@ -16,6 +16,7 @@ import com.aidea.aidea.domain.documents.entity.DocumentAiStatus;
 import com.aidea.aidea.domain.documents.entity.DocumentUpdate;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
 import com.aidea.aidea.domain.documents.repository.DocumentUpdateRepository;
+import com.aidea.aidea.domain.documents.websocket.QaUpdateBuffer;
 import com.aidea.aidea.global.util.YjsTextExtractor;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
 import com.aidea.aidea.global.exception.CustomException;
@@ -48,6 +49,7 @@ public class FeedbackService {
     private final FeedbackEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final TeamspaceRoleValidator roleValidator;
+    private final QaUpdateBuffer qaUpdateBuffer;
 
     private static final List<FeedbackStatus> IN_PROGRESS_STATUSES = List.of(
             FeedbackStatus.PENDING,
@@ -144,11 +146,13 @@ public class FeedbackService {
 
         feedback.setAnswers(answers);
         feedback.setStatus(FeedbackStatus.ANSWERING);
+        qaUpdateBuffer.clear(feedback.getDocument().getId());
 
         String fId = feedback.getId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                publishAnsweringEvent(feedback);
                 geminiService.callGeminiWithAnswers(fId);
             }
         });
@@ -211,6 +215,18 @@ public class FeedbackService {
             eventPublisher.publishToDocument(feedback.getDocument().getId(), eventJson);
         } catch (Exception e) {
             log.error("feedback:started 푸시 실패", e);
+        }
+    }
+
+    private void publishAnsweringEvent(Feedback feedback) {
+        try {
+            String eventJson = objectMapper.writeValueAsString(Map.of(
+                    "type", "feedback:answering",
+                    "feedbackId", feedback.getId()
+            ));
+            eventPublisher.publishToDocument(feedback.getDocument().getId(), eventJson);
+        } catch (Exception e) {
+            log.error("feedback:answering 푸시 실패", e);
         }
     }
 

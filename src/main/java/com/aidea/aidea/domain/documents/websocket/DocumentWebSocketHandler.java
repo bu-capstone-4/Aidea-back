@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,6 +47,9 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
     private static final List<FeedbackStatus> TERMINAL_STATUSES =
             List.of(FeedbackStatus.ACCEPTED, FeedbackStatus.REJECTED, FeedbackStatus.FAILED);
 
+    // 답변 Y.Doc 업데이트 1건의 base64 길이 상한 (원본 64KB 기준)
+    static final int MAX_QA_UPDATE_BASE64_LENGTH = 64 * 1024 * 4 / 3 + 16;
+
     private final DocumentUpdateBuffer updateBuffer;
     private final DocumentService documentService;
     private final FeedbackRepository feedbackRepository;
@@ -53,6 +57,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
     private final ObjectMapper objectMapper;
     private final SocketErrorSender socketErrorSender;
     private final AwarenessStore awarenessStore;
+    private final QaUpdateBuffer qaUpdateBuffer;
 
     // --- 연결 수립 ---
 
@@ -92,6 +97,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
             switch (type) {
                 case "doc:update" -> handleDocUpdate(session, payload);
                 case "doc:awareness" -> handleDocAwareness(session, payload);
+                case "qa:update" -> handleQaUpdate(session, payload);
                 default -> {
                     log.warn("[WS] unknown message type={} sessionId={}", type, session.getId());
                     socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
@@ -171,6 +177,7 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
         event.put("updates", updates);
         event.put("activeFeedback", activeFeedback);
         event.put("activeDraft", activeDraft);
+        event.put("activeQa", buildActiveQa(docId, activeFeedback, activeDraft));
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(event)));
     }
 
@@ -212,6 +219,93 @@ public class DocumentWebSocketHandler extends TextWebSocketHandler implements Fe
                 Map.of("type", "doc:update", "update", base64Update)
         );
         broadcastToOthers(session, docId, new TextMessage(broadcastJson));
+    }
+
+    // 질문 답변 중인 피드백/초안이 있으면 버퍼된 답변 업데이트를 내려주고, 없으면 남은 버퍼를 정리한다
+    private Map<String, Object> buildActiveQa(String docId, ActiveFeedbackInfo activeFeedback, ActiveDraftInfo activeDraft) {
+        String qaId = null;
+        if (activeFeedback != null && activeFeedback.status() == FeedbackStatus.QUESTIONING) {
+            qaId = activeFeedback.feedbackId();
+        } else if (activeDraft != null && activeDraft.status() == DraftStatus.QUESTIONING) {
+            qaId = activeDraft.draftId();
+        }
+
+        if (qaId == null) {
+            qaUpdateBuffer.clear(docId);
+            return null;
+        }
+
+        List<String> qaUpdates = qaUpdateBuffer.snapshot(docId, qaId).stream()
+                .map(u -> Base64.getEncoder().encodeToString(u))
+                .toList();
+        Map<String, Object> activeQa = new LinkedHashMap<>();
+        activeQa.put("qaId", qaId);
+        activeQa.put("updates", qaUpdates);
+        return activeQa;
+    }
+
+    private void handleQaUpdate(WebSocketSession session, Map<String, Object> payload) throws IOException {
+        String docId = (String) session.getAttributes().get("docId");
+        MemberRole role = (MemberRole) session.getAttributes().get("role");
+
+        if (role == MemberRole.VIEWER) {
+            log.debug("[WS] qa:update ignored docId={} sessionId={} reason=VIEWER_NOT_ALLOWED", docId, session.getId());
+            return;
+        }
+
+        String qaId = (String) payload.get("qaId");
+        String base64Update = (String) payload.get("update");
+
+        if (qaId == null || qaId.isBlank() || base64Update == null || base64Update.isBlank()) {
+            log.warn("[WS] qa:update missing qaId or update sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        if (base64Update.length() > MAX_QA_UPDATE_BASE64_LENGTH) {
+            log.warn("[WS] qa:update too large docId={} sessionId={} length={}", docId, session.getId(), base64Update.length());
+            return;
+        }
+
+        byte[] updateBinary;
+        try {
+            updateBinary = Base64.getDecoder().decode(base64Update);
+        } catch (IllegalArgumentException e) {
+            log.warn("[WS] qa:update invalid base64 sessionId={}", session.getId());
+            socketErrorSender.send(session, SocketErrorCode.INVALID_MESSAGE);
+            return;
+        }
+
+        // 키 입력마다 DB를 조회하지 않도록 qaId가 버퍼와 다를 때만 검증한다
+        Optional<String> cachedQaId = qaUpdateBuffer.currentQaId(docId);
+        if (!cachedQaId.map(qaId::equals).orElse(false) && !isQuestioningQa(docId, qaId)) {
+            // 제출 직후 지연 도착한 업데이트 등 — 타이핑 중인 사용자에게 오류로 보이지 않도록 조용히 drop
+            log.debug("[WS] qa:update dropped docId={} qaId={} reason=NOT_QUESTIONING", docId, qaId);
+            return;
+        }
+
+        if (!qaUpdateBuffer.append(docId, qaId, updateBinary)) {
+            log.warn("[WS] qa:update buffer limit exceeded docId={} qaId={}", docId, qaId);
+        }
+
+        String broadcastJson = objectMapper.writeValueAsString(
+                Map.of("type", "qa:update", "qaId", qaId, "update", base64Update)
+        );
+        broadcastToOthers(session, docId, new TextMessage(broadcastJson));
+    }
+
+    private boolean isQuestioningQa(String docId, String qaId) {
+        boolean questioningFeedback = feedbackRepository.findById(qaId)
+                .filter(fb -> fb.getDocument().getId().equals(docId))
+                .filter(fb -> fb.getStatus() == FeedbackStatus.QUESTIONING)
+                .isPresent();
+        if (questioningFeedback) {
+            return true;
+        }
+        return draftRepository.findByDocumentId(docId)
+                .filter(d -> d.getId().equals(qaId))
+                .filter(d -> d.getStatus() == DraftStatus.QUESTIONING)
+                .isPresent();
     }
 
     private void sendAwarenessInit(WebSocketSession session, String docId) throws IOException {
