@@ -185,6 +185,19 @@ Document 생성 직후 (null)
 | `draft:ready` | 초안 생성 완료 | `type`, `documentId`, `content` |
 | `draft:error` | 초안 생성 실패 | `type`, `documentId`, `errorMessage` |
 
+### 4-5-1. IDEA 질문 답변 제출 (`POST /api/drafts/{draftId}/answers`)
+
+1. Draft를 행 잠금(`SELECT … FOR UPDATE`)으로 조회, 권한(OWNER/MEMBER) 확인, 상태가 `QUESTIONING`이 아니면 `DRAFT_INVALID_STATUS` (팀원 동시 제출 시 늦은 쪽은 앞선 커밋 후 ANSWERING을 읽어 여기서 거절)
+2. 답변 저장(빈 배열이면 건너뛰기), `status = ANSWERING`
+3. `QaUpdateBuffer.clear(docId)` — 작성 중이던 답변 Y.Doc 업데이트 버퍼 정리
+4. 트랜잭션 커밋 후 **팀스페이스 소켓** `draft:answering` 발행 → `generateFinalIdeaDraft` 비동기 호출
+
+| 이벤트 | 채널 | 페이로드 |
+|---|---|---|
+| `draft:answering` | 팀스페이스 소켓 `{event, data}` | `documentId`, `draftId` |
+
+답변은 제출 전까지 팀원끼리 실시간으로 함께 작성된다(전용 Y.Doc + 문서 소켓 `qa:update`). 프로토콜은 `realtime-collaboration.md`의 "AI 질문 답변 실시간 협업" 절 참고.
+
 ### 4-6. WebSocket 연결 시 초안 상태 복원
 
 문서 WebSocket 연결 시 `doc:init` 이벤트에 `activeDraft` 필드가 포함된다.

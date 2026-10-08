@@ -3,18 +3,32 @@ package com.aidea.aidea.domain.draft.service;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.entity.DocumentType;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.websocket.QaUpdateBuffer;
+import com.aidea.aidea.domain.draft.controller.dto.DraftAnswerRequest;
+import com.aidea.aidea.domain.draft.entity.Draft;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
+import com.aidea.aidea.domain.teamspace.entity.TeamSpace;
+import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
+import com.aidea.aidea.global.exception.CustomException;
+import com.aidea.aidea.global.exception.ErrorCode;
 import com.aidea.aidea.global.util.TeamspaceRoleValidator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,16 +41,76 @@ class DraftServiceTest {
     @Mock private DocumentRepository documentRepository;
     @Mock private DraftAsyncExecutor draftAsyncExecutor;
     @Mock private TeamspaceRoleValidator roleValidator;
+    @Mock private TeamspaceEventPublisher teamspaceEventPublisher;
+    @Mock private QaUpdateBuffer qaUpdateBuffer;
 
     private DraftService service;
 
     private static final String DOC_ID = "doc-1";
+    private static final String DRAFT_ID = "draft-1";
+    private static final String TEAMSPACE_ID = "ts-1";
     private static final String IDEA_CONTEXT = "아이디어 설명";
     private static final String TEAMSPACE_NAME = "My Team";
 
     @BeforeEach
     void setUp() {
-        service = new DraftService(draftRepository, documentRepository, draftAsyncExecutor, roleValidator);
+        service = new DraftService(draftRepository, documentRepository, draftAsyncExecutor, roleValidator,
+                teamspaceEventPublisher, qaUpdateBuffer);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private Draft draftWithStatus(DraftStatus status) {
+        TeamSpace teamspace = mock(TeamSpace.class);
+        when(teamspace.getTeamspaceId()).thenReturn(TEAMSPACE_ID);
+        Document doc = mock(Document.class);
+        when(doc.getTeamspace()).thenReturn(teamspace);
+        lenient().when(doc.getId()).thenReturn(DOC_ID);
+        lenient().when(teamspace.getName()).thenReturn(TEAMSPACE_NAME);
+        Draft draft = Draft.create(DRAFT_ID, doc, IDEA_CONTEXT);
+        draft.setStatus(status);
+        return draft;
+    }
+
+    // ───── submitDraftAnswer ─────
+
+    @Test
+    void submitDraftAnswer_clearsQaBufferAndPublishesAnsweringAfterCommit() {
+        Draft draft = draftWithStatus(DraftStatus.QUESTIONING);
+        when(draftRepository.findByIdForUpdate(DRAFT_ID)).thenReturn(Optional.of(draft));
+        TransactionSynchronizationManager.initSynchronization();
+
+        service.submitDraftAnswer(DRAFT_ID, new DraftAnswerRequest(List.of(
+                new DraftAnswerRequest.AnswerItem("q1", "답변"))), 1L);
+
+        verify(qaUpdateBuffer).clear(DOC_ID);
+        verify(teamspaceEventPublisher, never()).publishDraftAnswering(any(), any(), any());
+
+        List<TransactionSynchronization> synchronizations = TransactionSynchronizationManager.getSynchronizations();
+        assertThat(synchronizations).hasSize(1);
+        synchronizations.get(0).afterCommit();
+
+        verify(teamspaceEventPublisher).publishDraftAnswering(TEAMSPACE_ID, DOC_ID, DRAFT_ID);
+        verify(draftAsyncExecutor).generateFinalIdeaDraft(DRAFT_ID, TEAMSPACE_ID, TEAMSPACE_NAME);
+    }
+
+    @Test
+    void submitDraftAnswer_throwsAndPublishesNothing_whenNotQuestioning() {
+        Draft draft = draftWithStatus(DraftStatus.ANSWERING);
+        when(draftRepository.findByIdForUpdate(DRAFT_ID)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.submitDraftAnswer(DRAFT_ID, new DraftAnswerRequest(List.of()), 1L))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DRAFT_INVALID_STATUS);
+
+        verify(qaUpdateBuffer, never()).clear(any());
+        verify(teamspaceEventPublisher, never()).publishDraftAnswering(any(), any(), any());
     }
 
     // ───── savePendingDraft ─────

@@ -149,14 +149,17 @@ POST /answers 제출        ┌──────┴──────┐
 ### 4-3. 답변 제출 (`POST /api/feedbacks/{feedbackId}/answers`)
 
 ```
-1. feedbackId로 Feedback 조회
+1. feedbackId로 Feedback을 행 잠금(`SELECT … FOR UPDATE`)으로 조회 — 팀원 동시 제출 시 늦은 요청은 앞선 커밋을 기다린 뒤 ANSWERING을 읽게 됨
 2. 권한 확인
-3. 현재 상태가 QUESTIONING인지 확인 (아니면 FEEDBACK_INVALID_STATUS 오류)
+3. 현재 상태가 QUESTIONING인지 확인 (아니면 FEEDBACK_INVALID_STATUS 오류 — 동시 제출의 늦은 쪽도 여기서 거절)
 4. 답변 리스트를 Answer 객체로 변환하여 feedback.answers에 저장
 5. status = ANSWERING
-6. 트랜잭션 커밋 후 GeminiService.callGeminiWithAnswers() 비동기 호출
-7. HTTP 202 Accepted 반환
+6. QaUpdateBuffer.clear(docId) — 작성 중이던 답변 Y.Doc 업데이트 버퍼 정리
+7. 트랜잭션 커밋 후 feedback:answering 발행(문서 접속자 전원 → 질문 화면 종료) → GeminiService.callGeminiWithAnswers() 비동기 호출
+8. HTTP 202 Accepted 반환
 ```
+
+> 답변은 제출 전까지 팀원끼리 실시간으로 함께 작성된다(전용 Y.Doc + 문서 소켓 `qa:update`). 프로토콜은 `realtime-collaboration.md`의 "AI 질문 답변 실시간 협업" 절 참고.
 
 ### 4-4. Gemini 재호출 (`GeminiService.callGeminiWithAnswers`)
 
@@ -479,6 +482,7 @@ private String buildInitialPrompt(String originalMarkdown, String additionalRequ
 |------------|----------|---------|
 | `feedback:started` | 피드백 요청 접수 직후 | `feedbackId`, `requestedBy` |
 | `feedback:questioning` | 질문 생성 완료 | `feedbackId`, `questions[]` |
+| `feedback:answering` | 답변 제출 커밋 직후 | `feedbackId` |
 | `feedback:ready` | 수정안 생성 완료 | `feedbackId`, `revisedMarkdown` |
 | `feedback:resolved` | 수락 또는 거부 | `feedbackId`, `outcome` |
 | `feedback:error` | Gemini API 실패 | `feedbackId` |

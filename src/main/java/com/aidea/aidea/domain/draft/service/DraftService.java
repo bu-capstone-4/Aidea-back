@@ -3,6 +3,7 @@ package com.aidea.aidea.domain.draft.service;
 import com.aidea.aidea.domain.documents.entity.Document;
 import com.aidea.aidea.domain.documents.entity.DocumentAiStatus;
 import com.aidea.aidea.domain.documents.repository.DocumentRepository;
+import com.aidea.aidea.domain.documents.websocket.QaUpdateBuffer;
 import com.aidea.aidea.domain.draft.controller.dto.DraftAnswerRequest;
 import com.aidea.aidea.domain.draft.controller.dto.DraftAnswerResponse;
 import com.aidea.aidea.domain.draft.entity.Draft;
@@ -10,6 +11,7 @@ import com.aidea.aidea.domain.draft.entity.DraftAnswer;
 import com.aidea.aidea.domain.draft.entity.DraftStatus;
 import com.aidea.aidea.domain.draft.repository.DraftRepository;
 import com.aidea.aidea.domain.teamspace.entity.MemberRole;
+import com.aidea.aidea.domain.teamspace.service.TeamspaceEventPublisher;
 import com.aidea.aidea.global.exception.CustomException;
 import com.aidea.aidea.global.exception.ErrorCode;
 import com.aidea.aidea.global.util.TeamspaceRoleValidator;
@@ -32,6 +34,8 @@ public class DraftService {
     private final DocumentRepository documentRepository;
     private final DraftAsyncExecutor draftAsyncExecutor;
     private final TeamspaceRoleValidator roleValidator;
+    private final TeamspaceEventPublisher teamspaceEventPublisher;
+    private final QaUpdateBuffer qaUpdateBuffer;
 
     @Transactional
     public void savePendingDraft(String documentId, String ideaContext) {
@@ -91,7 +95,8 @@ public class DraftService {
 
     @Transactional
     public DraftAnswerResponse submitDraftAnswer(String draftId, DraftAnswerRequest request, Long userId) {
-        Draft draft = draftRepository.findById(draftId)
+        // 동시 제출 시 둘 다 QUESTIONING을 읽고 통과하지 않도록 행을 잠그고 상태를 확인한다
+        Draft draft = draftRepository.findByIdForUpdate(draftId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DRAFT_NOT_FOUND));
 
         Document document = draft.getDocument();
@@ -111,12 +116,19 @@ public class DraftService {
         draft.setAnswers(answers);
         draft.setStatus(DraftStatus.ANSWERING);
         log.warn("[DRAFT] ANSWERING 전환 draftId={} answerCount={}", draftId, answers.size());
+        qaUpdateBuffer.clear(document.getId());
 
         String dId = draft.getId();
+        String documentId = document.getId();
         String teamspaceName = document.getTeamspace().getName();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                try {
+                    teamspaceEventPublisher.publishDraftAnswering(teamspaceId, documentId, dId);
+                } catch (Exception e) {
+                    log.error("[DRAFT] draft:answering 푸시 실패 draftId={}", dId, e);
+                }
                 log.warn("[DRAFT] afterCommit fired - scheduling final IDEA generation draftId={}", dId);
                 draftAsyncExecutor.generateFinalIdeaDraft(dId, teamspaceId, teamspaceName);
             }
