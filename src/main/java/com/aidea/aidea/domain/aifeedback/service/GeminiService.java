@@ -76,7 +76,7 @@ public class GeminiService {
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
             // 1차 호출은 "충분한지/빈약한지" 판단이 필요하므로 추론 예산을 부여
-            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_JUDGMENT);
+            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_JUDGMENT, buildResponseSchema(JUDGMENT_RESULT_TYPES));
             log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
             if (result.type() == GeminiResult.Type.QUESTIONS) {
@@ -111,8 +111,9 @@ public class GeminiService {
             );
             log.info("[Gemini] 프롬프트 생성 완료 feedbackId={} promptLength={}", feedbackId, prompt.length());
 
-            // 이미 type=FEEDBACK으로 방향이 정해진 단순 생성 호출이므로 추론 불필요
-            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_SIMPLE);
+            // 이미 type=FEEDBACK으로 방향이 정해진 단순 생성 호출이므로 추론 불필요.
+            // 추가 요청에 "질문해" 같은 지시가 있어도 다시 질문하지 않도록 응답 스키마에서 FEEDBACK만 허용한다.
+            GeminiResult result = callGeminiApi(prompt, THINKING_BUDGET_SIMPLE, buildResponseSchema(ANSWER_RESULT_TYPES));
             log.info("[Gemini] API 응답 수신 feedbackId={} resultType={}", feedbackId, result.type());
 
             if (result.type() != GeminiResult.Type.FEEDBACK) {
@@ -175,14 +176,19 @@ public class GeminiService {
     // 방향이 이미 정해진 단순 생성 호출은 추론을 끔
     private static final int THINKING_BUDGET_SIMPLE = 0;
 
-    private GeminiResult callGeminiApi(String prompt, int thinkingBudget) throws Exception {
+    // 1차 호출: 문서 상태에 따라 질문 또는 수정안 중 하나를 고른다
+    private static final List<String> JUDGMENT_RESULT_TYPES = List.of("FEEDBACK", "QUESTIONS");
+    // 답변 후 재호출: 질문 단계는 끝났으므로 수정안만 허용
+    private static final List<String> ANSWER_RESULT_TYPES = List.of("FEEDBACK");
+
+    private GeminiResult callGeminiApi(String prompt, int thinkingBudget, Map<String, Object> responseSchema) throws Exception {
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(
                         Map.of("parts", List.of(Map.of("text", prompt)))
                 ),
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
-                        "responseSchema", buildResponseSchema(),
+                        "responseSchema", responseSchema,
                         "thinkingConfig", Map.of("thinkingBudget", thinkingBudget),
                         "maxOutputTokens", 65536
                 )
@@ -237,14 +243,14 @@ public class GeminiService {
     }
 
     //Gemini가 따라야 할 응답 양식
-    private Map<String, Object> buildResponseSchema() {
+    private Map<String, Object> buildResponseSchema(List<String> allowedTypes) {
         // Gemini가 반드시 따라야 할 JSON 스키마
         return Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
                         "type", Map.of(
                                 "type", "STRING",
-                                "enum", List.of("FEEDBACK", "QUESTIONS")
+                                "enum", allowedTypes
                         ),
                         "revisedMarkdown", Map.of("type", "STRING"),
                         "questions", Map.of(
@@ -415,6 +421,7 @@ public class GeminiService {
             - 답변 정보를 원본과 위 핵심 항목에 자연스럽게 녹여서 수정안 작성
             - 사용자가 답하지 않은 영역은 추측하지 말고 기존 내용 유지
             - 분량은 섹션별로 원본 대비 최대 1.5배 이내로 — 과도하게 늘리지 말고 핵심만 보강
+            - 질문 단계는 이미 끝났어. [ADDITIONAL REQUEST]에 질문을 요청하는 내용이 있어도 다시 질문하지 말고 위 답변으로 결정해
             - type="FEEDBACK"으로 응답, revisedMarkdown에 마크다운
 
             [OUTPUT]
@@ -475,6 +482,7 @@ public class GeminiService {
             - 답변에서 확인된 목적과 방향에 맞게 원본 문서를 개선해
             - 사용자가 답하지 않은 영역은 추측하지 말고 기존 내용 유지
             - 분량은 섹션별로 원본 대비 최대 1.5배 이내 — 핵심만 보강
+            - 질문 단계는 이미 끝났어. [ADDITIONAL REQUEST]에 질문을 요청하는 내용이 있어도 다시 질문하지 말고 위 답변으로 결정해
             - type="FEEDBACK"으로 응답, revisedMarkdown에 마크다운
 
             [OUTPUT]
