@@ -7,7 +7,11 @@ spring:
       client:
         registration:
           github:
-            redirect-uri: https://aidea-bu.duckdns.org/login/oauth2/code/github
+            # 프론트(Cloudflare Pages Functions)가 /login/oauth2/** 를 백엔드로 프록시한다.
+            # 콜백을 프론트 오리진에서 받아야 인증 쿠키가 프론트 도메인의 first-party 쿠키로 저장되어
+            # 서드파티 쿠키를 차단하는 iOS Safari(ITP)에서도 로그인이 유지된다.
+            # GitHub OAuth App의 Authorization callback URL도 이 값과 같아야 한다.
+            redirect-uri: ${OAUTH2_REDIRECT_URI:https://aidea-front.pages.dev/login/oauth2/code/github}
 
 frontend:
   url: ${FRONTEND_URL}

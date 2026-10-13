@@ -37,6 +37,7 @@ The app reads from a `.env` file via `spring-dotenv`. Required variables:
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth2 |
 | `JWT_SECRET` | JWT signing key |
 | `FRONTEND_URL` | CORS allowed origin |
+| `OAUTH2_REDIRECT_URI` | (prod, optional) GitHub OAuth callback URL. Defaults to `https://aidea-front.pages.dev/login/oauth2/code/github` — the frontend proxies `/api`, `/oauth2`, `/login/oauth2`, `/ws` to this backend so auth cookies are first-party (iOS Safari blocks third-party cookies). Must match the GitHub OAuth App callback URL. |
 | `GEMINI_API_KEY` | Gemini 1.5 Flash API |
 | `COOKIE_SECURE` | `true` in prod, `false` locally |
 
